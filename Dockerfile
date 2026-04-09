@@ -18,4 +18,4 @@ RUN npm prune --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 EXPOSE 8080
-CMD ["node", "dist/main"]
+CMD ["node", "dist/src/main.js"]
