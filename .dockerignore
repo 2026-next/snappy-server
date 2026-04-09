@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+coverage
+.vscode
+*.log
+npm-debug.log*
+Dockerfile*
+cloudbuild.yaml

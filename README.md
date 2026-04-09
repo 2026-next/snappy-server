@@ -57,18 +57,82 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
-## Deployment
+## Deployment (GCP Cloud Run)
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+This repository includes:
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+- `Dockerfile` for production container image
+- `.dockerignore` for lean builds
+- `cloudbuild.yaml` for build + deploy via Cloud Build
+
+### 1. Prerequisites
+
+- Install and authenticate Google Cloud CLI
+- Set a project:
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+gcloud config set project YOUR_PROJECT_ID
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+- Enable APIs:
+
+```bash
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com secretmanager.googleapis.com
+```
+
+### 2. Get your Supabase connection string
+
+In Supabase Dashboard:
+
+- Open your project
+- Go to `Project Settings` -> `Database`
+- Copy `Connection string` (Transaction pooler is recommended)
+- Ensure it includes `sslmode=require`
+
+Example format:
+
+```bash
+postgresql://postgres.PROJECT_REF:YOUR_PASSWORD@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require
+```
+
+### 3. Create `DATABASE_URL` secret in GCP
+
+```bash
+echo -n 'postgresql://postgres.PROJECT_REF:YOUR_PASSWORD@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require' \
+  | gcloud secrets create snappy-database-url --data-file=-
+```
+
+If the secret already exists, add a new version:
+
+```bash
+echo -n 'postgresql://postgres.PROJECT_REF:YOUR_PASSWORD@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require' \
+  | gcloud secrets versions add snappy-database-url --data-file=-
+```
+
+Allow Cloud Run runtime service account to read the secret:
+
+```bash
+PROJECT_NUMBER=$(gcloud projects describe YOUR_PROJECT_ID --format='value(projectNumber)')
+gcloud secrets add-iam-policy-binding snappy-database-url \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+  --role='roles/secretmanager.secretAccessor'
+```
+
+### 4. Deploy with Cloud Build
+
+```bash
+gcloud builds submit --config cloudbuild.yaml \
+  --substitutions=_SERVICE_NAME=snappy-server,_REGION=asia-northeast3,_DATABASE_URL_SECRET=snappy-database-url
+```
+
+### 5. Run Prisma migrations against Supabase
+
+```bash
+DATABASE_URL='postgresql://postgres.PROJECT_REF:YOUR_PASSWORD@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require' \
+npm run prisma:migrate:deploy
+```
+
+Tip: For migrations, if your pooler blocks DDL operations, use Supabase direct database port `5432` URL only for migration commands.
 
 ## Resources
 
