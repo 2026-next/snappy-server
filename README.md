@@ -44,6 +44,29 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
+## Development with Docker
+
+1. Create your local env file from template:
+
+```bash
+cp .env.example .env
+```
+
+2. Fill in real Supabase credentials in `.env`.
+
+3. Build and run the development container:
+
+```bash
+npm run docker:dev:build
+npm run docker:dev
+```
+
+4. Stop container:
+
+```bash
+npm run docker:dev:down
+```
+
 ## Run tests
 
 ```bash
@@ -133,6 +156,11 @@ npm run prisma:migrate:deploy
 ```
 
 Tip: For migrations, if your pooler blocks DDL operations, use Supabase direct database port `5432` URL only for migration commands.
+
+Recommended env split:
+
+- `DATABASE_URL`: Supabase pooler (`6543`) for app runtime
+- `DIRECT_URL`: Supabase direct (`5432`) for migration commands
 
 ## Resources
 
