@@ -9,7 +9,9 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    // Prefer direct URL for CLI tasks (migrate/introspect); fall back to runtime pooler URL.
+    // Prefer DIRECT_URL for CLI tasks (migrate/introspect) and use DATABASE_URL as fallback.
+    // For Cloud SQL, DIRECT_URL can point to a direct/private endpoint while DATABASE_URL
+    // can stay aligned with runtime networking policy.
     url: process.env["DIRECT_URL"] ?? process.env["DATABASE_URL"],
   },
 });
