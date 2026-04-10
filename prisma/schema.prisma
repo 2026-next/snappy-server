@@ -10,3 +10,135 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum UserRole {
+  ADMIN
+}
+
+enum OAuthProvider {
+  GOOGLE
+  KAKAO
+}
+
+enum SessionType {
+  USER
+  GUEST
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String?        @unique
+  name          String?
+  role          UserRole       @default(ADMIN)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  oauthAccounts OAuthAccount[]
+  ownedEvents   Event[]        @relation("EventOwner")
+  sessions      AuthSession[]  @relation("UserSession")
+}
+
+model OAuthAccount {
+  id              String        @id @default(cuid())
+  provider        OAuthProvider
+  providerUserId  String
+  email           String?
+  displayName     String?
+  profileImageUrl String?
+  accessToken     String?
+  refreshToken    String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+model Event {
+  id        String    @id @default(cuid())
+  name      String
+  eventDate DateTime
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  ownerId   String
+  owner     User      @relation("EventOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  guests    Guest[]
+  photos    Photo[]
+  messages  Message[]
+
+  @@index([ownerId, eventDate])
+}
+
+model Guest {
+  id            String        @id @default(cuid())
+  name          String
+  passwordHash  String
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  eventId       String
+  event         Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  uploadedPhotos Photo[]      @relation("GuestUploader")
+  messages      Message[]     @relation("GuestMessageAuthor")
+  sessions      AuthSession[] @relation("GuestSession")
+
+  @@unique([eventId, name])
+  @@index([eventId, name])
+}
+
+model Photo {
+  id                  String    @id @default(cuid())
+  originalObjectKey   String    @unique
+  uploadedByName      String?
+  mimeType            String?
+  fileSizeBytes       Int?
+  width               Int?
+  height              Int?
+  exifTakenAt         DateTime?
+  uploadedAt          DateTime  @default(now())
+  isDeleted           Boolean   @default(false)
+  deletedAt           DateTime?
+  isDownloadedByCouple Boolean  @default(false)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  eventId             String
+  event               Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  uploadedByGuestId   String?
+  uploadedByGuest     Guest?    @relation("GuestUploader", fields: [uploadedByGuestId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, uploadedAt])
+  @@index([eventId, isDeleted, uploadedAt])
+  @@index([eventId, uploadedByGuestId, uploadedAt])
+}
+
+model Message {
+  id            String    @id @default(cuid())
+  content       String    @db.Text
+  authorName    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  eventId       String
+  event         Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  authorGuestId String?
+  authorGuest   Guest?    @relation("GuestMessageAuthor", fields: [authorGuestId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, createdAt])
+  @@index([eventId, authorGuestId])
+}
+
+model AuthSession {
+  id               String      @id @default(cuid())
+  sessionType      SessionType
+  refreshTokenHash String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  userId           String?
+  user             User?       @relation("UserSession", fields: [userId], references: [id], onDelete: Cascade)
+  guestId          String?
+  guest            Guest?      @relation("GuestSession", fields: [guestId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([guestId, expiresAt])
+}
