@@ -22,6 +22,7 @@ export class AuthService {
   ) {}
 
   // Guest login with event ID, name, and password
+  //
   async guestLogin(dto: GuestLoginDto) {
     const guest = await this.authRepository.findGuestByEventIdAndName(dto.eventId, dto.name);
 
@@ -50,6 +51,8 @@ export class AuthService {
     });
   }
 
+  // Refresh access token using a valid refresh token
+  //
   async refresh(dto: RefreshTokenDto) {
     let payload: RefreshTokenPayload;
 

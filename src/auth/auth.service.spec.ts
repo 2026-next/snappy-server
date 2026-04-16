@@ -16,7 +16,6 @@ describe('AuthService', () => {
             findGuestByEventIdAndName: jest.fn(),
             createAuthSession: jest.fn(),
             findAuthSessionByIdWithRelations: jest.fn(),
-            findAuthSessionById: jest.fn(),
             updateAuthSessionRefreshToken: jest.fn(),
             revokeAuthSession: jest.fn(),
           },

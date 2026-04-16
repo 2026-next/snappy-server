@@ -7,12 +7,11 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { GuestLoginDto } from './dto/guest-login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { AccessTokenGuard } from './guards/access-token.guard';
-import { AccessTokenPayload } from './types/token-payload.types';
+import type { AuthenticatedRequest } from './types/authenticated-request-types';
 
 @Controller('auth')
 export class AuthController {
@@ -30,25 +29,17 @@ export class AuthController {
 
   @UseGuards(AccessTokenGuard)
   @Get('me')
-  me(@Req() req: Request) {
-    const payload = req.user as AccessTokenPayload | undefined;
-
-    if (!payload) {
-      throw new UnauthorizedException('Invalid access token');
+  me(@Req() req: AuthenticatedRequest) {
+    if (!req.user) {
+      throw new UnauthorizedException('User not authenticated');
     }
-
-    return this.authService.me(payload);
+    
+    return this.authService.me(req.user);
   }
 
   @UseGuards(AccessTokenGuard)
   @Post('logout')
-  logout(@Req() req: Request) {
-    const payload = req.user as AccessTokenPayload | undefined;
-
-    if (!payload) {
-      throw new UnauthorizedException('Invalid access token');
-    }
-
-    return this.authService.logout(payload);
+  logout(@Req() req: AuthenticatedRequest) {
+    return this.authService.logout(req.user);
   }
 }
