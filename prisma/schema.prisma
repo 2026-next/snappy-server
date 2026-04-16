@@ -11,10 +11,6 @@ datasource db {
   provider = "postgresql"
 }
 
-enum UserRole {
-  ADMIN
-}
-
 enum OAuthProvider {
   GOOGLE
   KAKAO
@@ -29,7 +25,6 @@ model User {
   id            String         @id @default(cuid())
   email         String?        @unique
   name          String?
-  role          UserRole       @default(ADMIN)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   oauthAccounts OAuthAccount[]
