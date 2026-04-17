@@ -18,6 +18,15 @@ async function bootstrap() {
     .setTitle('Snappy Server')
     .setDescription('API documentation for the Snappy server')
     .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        in: 'header',
+      },
+      'access-token',
+    )
     .build();
 
   const document = () => SwaggerModule.createDocument(app, swaggerConfig);

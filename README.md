@@ -52,7 +52,7 @@ $ npm run start:prod
 cp .env.example .env
 ```
 
-2. Fill in real Supabase credentials in `.env`.
+2. Fill in real GCP VM PostgreSQL credentials in `.env`.
 
 3. Build and run the development container:
 
@@ -80,13 +80,15 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
-## Deployment (GCP Cloud Run)
+## Deployment (Single GCP VM)
+
+This setup assumes the app and PostgreSQL both run on the same GCP VM.
 
 This repository includes:
 
 - `Dockerfile` for production container image
 - `.dockerignore` for lean builds
-- `cloudbuild.yaml` for build + deploy via Cloud Build
+- `cloudbuild.yaml` for Cloud Build if you still want image builds
 
 ### 1. Prerequisites
 
@@ -97,70 +99,40 @@ This repository includes:
 gcloud config set project YOUR_PROJECT_ID
 ```
 
-- Enable APIs:
+### 2. Install PostgreSQL on the VM
+
+Install PostgreSQL on the VM and create a database plus user for the app.
+
+Example connection string for the same machine:
 
 ```bash
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com secretmanager.googleapis.com
+postgresql://app_user:YOUR_PASSWORD@localhost:5432/snappy?schema=public
 ```
 
-### 2. Get your Supabase connection string
+### 3. Set environment variables on the VM
 
-In Supabase Dashboard:
-
-- Open your project
-- Go to `Project Settings` -> `Database`
-- Copy `Connection string` (Transaction pooler is recommended)
-- Ensure it includes `sslmode=require`
-
-Example format:
+Put the app and Prisma URLs in the VM's `.env` file:
 
 ```bash
-postgresql://postgres.PROJECT_REF:YOUR_PASSWORD@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require
+DATABASE_URL='postgresql://app_user:YOUR_PASSWORD@localhost:5432/snappy?schema=public'
+DIRECT_URL='postgresql://app_user:YOUR_PASSWORD@localhost:5432/snappy?schema=public'
 ```
 
-### 3. Create `DATABASE_URL` secret in GCP
+### 4. Run migrations
 
 ```bash
-echo -n 'postgresql://postgres.PROJECT_REF:YOUR_PASSWORD@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require' \
-  | gcloud secrets create snappy-database-url --data-file=-
-```
-
-If the secret already exists, add a new version:
-
-```bash
-echo -n 'postgresql://postgres.PROJECT_REF:YOUR_PASSWORD@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require' \
-  | gcloud secrets versions add snappy-database-url --data-file=-
-```
-
-Allow Cloud Run runtime service account to read the secret:
-
-```bash
-PROJECT_NUMBER=$(gcloud projects describe YOUR_PROJECT_ID --format='value(projectNumber)')
-gcloud secrets add-iam-policy-binding snappy-database-url \
-  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
-  --role='roles/secretmanager.secretAccessor'
-```
-
-### 4. Deploy with Cloud Build
-
-```bash
-gcloud builds submit --config cloudbuild.yaml \
-  --substitutions=_SERVICE_NAME=snappy-server,_REGION=asia-northeast3,_DATABASE_URL_SECRET=snappy-database-url
-```
-
-### 5. Run Prisma migrations against Supabase
-
-```bash
-DATABASE_URL='postgresql://postgres.PROJECT_REF:YOUR_PASSWORD@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require' \
 npm run prisma:migrate:deploy
 ```
 
-Tip: For migrations, if your pooler blocks DDL operations, use Supabase direct database port `5432` URL only for migration commands.
+### 5. Start the app
 
-Recommended env split:
+Run the Nest app on the same VM after PostgreSQL is up:
 
-- `DATABASE_URL`: Supabase pooler (`6543`) for app runtime
-- `DIRECT_URL`: Supabase direct (`5432`) for migration commands
+```bash
+npm run start:prod
+```
+
+Because the app and database are on the same VM, do not expose port `5432` publicly unless you really need to.
 
 ## Resources
 
