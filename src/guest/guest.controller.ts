@@ -1,34 +1,20 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { GuestService } from './guest.service';
-import { CreateGuestDto } from './dto/create-guest.dto';
-import { UpdateGuestDto } from './dto/update-guest.dto';
+import { CheckGuestNameDto } from './dto/check-name.dto';
+import { AccessTokenGuard } from '../auth/guards/access-token.guard';
+import type { AuthenticatedRequest } from '../auth/types/authenticated-request-types';
 
+@ApiTags('Guest')
 @Controller('guest')
 export class GuestController {
   constructor(private readonly guestService: GuestService) {}
 
-  @Post()
-  create(@Body() createGuestDto: CreateGuestDto) {
-    return this.guestService.create(createGuestDto);
-  }
-
-  @Get()
-  findAll() {
-    return this.guestService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.guestService.findOne(+id);
-  }
-
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateGuestDto: UpdateGuestDto) {
-    return this.guestService.update(+id, updateGuestDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.guestService.remove(+id);
+  @ApiOperation({ summary: 'Check whether guest name is available' })
+  @ApiBody({ type: CheckGuestNameDto })
+  @ApiOkResponse({ description: 'Name availability returned' })
+  @Post('check-name')
+  checkName(@Body() checkGuestNameDto: CheckGuestNameDto) {
+    return this.guestService.checkNameExists(checkGuestNameDto);
   }
 }
