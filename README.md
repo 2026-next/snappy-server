@@ -44,6 +44,26 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
+## Google OAuth (Passport) test flow
+
+This project uses Passport Google strategy endpoints:
+
+- `GET /auth/oauth/google` (starts Google consent redirect)
+- `GET /auth/oauth/google/passport/callback` (Google callback, returns token pair JSON)
+
+Quick test steps:
+
+1. Start server and open Swagger UI.
+2. Call `GET /auth/oauth/google` from Swagger (or open it directly in browser).
+3. Complete Google login/consent.
+4. You will be redirected to `GET /auth/oauth/google/passport/callback` and receive access/refresh tokens as JSON.
+
+Required env vars:
+
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- Optional: `GOOGLE_CALLBACK_URL` (default: `http://localhost:3000/auth/oauth/google/passport/callback`)
+
 ## Development with Docker
 
 1. Create your local env file from template:

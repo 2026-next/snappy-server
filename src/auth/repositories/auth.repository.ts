@@ -17,6 +17,16 @@ export class AuthRepository {
     });
   }
 
+  async createGuest(data: { eventId: string; name: string; passwordHash: string }) {
+    return this.prisma.guest.create({
+      data: {
+        eventId: data.eventId,
+        name: data.name,
+        passwordHash: data.passwordHash,
+      },
+    });
+  }
+
   async createAuthSession(data: {
     sessionType: SessionType;
     guestId?: string;
@@ -37,8 +47,24 @@ export class AuthRepository {
     return this.prisma.authSession.findUnique({
       where: { id: sessionId },
       include: {
-        guest: true,
-        user: true,
+        guest: {
+          select: {
+            id: true,
+            name: true,
+            eventId: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        },
       },
     });
   }
