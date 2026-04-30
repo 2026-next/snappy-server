@@ -6,9 +6,9 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { SessionType } from '@prisma/client';
-import { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AccessTokenPayload } from '../types/token-payload.types';
+import type { AccessTokenPayload } from '../types/token-payload.types';
+import type { AuthenticatedRequest } from '../types/authenticated-request-types';
 
 @Injectable()
 export class AccessTokenGuard implements CanActivate {
@@ -18,7 +18,7 @@ export class AccessTokenGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<Request>();
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const token = this.extractBearerToken(request);
 
     if (!token) {
@@ -61,8 +61,8 @@ export class AccessTokenGuard implements CanActivate {
     return true;
   }
 
-  private extractBearerToken(request: Request) {
-    const authorization = request.headers.authorization;
+  private extractBearerToken(request: AuthenticatedRequest) {
+    const authorization = request.headers['authorization'];
 
     if (!authorization) {
       return null;

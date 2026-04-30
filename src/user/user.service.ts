@@ -1,26 +1,18 @@
-import { Injectable } from '@nestjs/common';
-import { CreateUserDto } from './dto/create-user.dto';
+import { ForbiddenException, Injectable } from '@nestjs/common';
+import { SessionType } from '@prisma/client';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UserRepository } from './repositories/user.repository';
+import type { AccessTokenPayload } from '../auth/types/token-payload.types';
 
 @Injectable()
 export class UserService {
-  create(createUserDto: CreateUserDto) {
-    return 'This action adds a new user';
-  }
+  constructor(private readonly userRepository: UserRepository) {}
 
-  findAll() {
-    return `This action returns all user`;
-  }
+  async updateMe(payload: AccessTokenPayload, updateUserDto: UpdateUserDto) {
+    if (payload.sessionType !== SessionType.USER) {
+      throw new ForbiddenException('User session is required');
+    }
 
-  findOne(id: number) {
-    return `This action returns a #${id} user`;
-  }
-
-  update(id: number, updateUserDto: UpdateUserDto) {
-    return `This action updates a #${id} user`;
-  }
-
-  remove(id: number) {
-    return `This action removes a #${id} user`;
+    return this.userRepository.update(payload.sub, updateUserDto);
   }
 }
