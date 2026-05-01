@@ -14,7 +14,9 @@ import {
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
+import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { GuestLoginDto } from './dto/guest-login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -38,10 +40,43 @@ export class AuthController {
     type: TokenPairResponseDto,
   })
   @ApiUnauthorizedResponse({ description: 'Invalid guest credentials' })
+  @ApiUnprocessableEntityResponse({ description: 'Event not found' })
   @Post('guest/login')
   guestLogin(@Body() guestLoginDto: GuestLoginDto) {
     return this.authService.guestLogin(guestLoginDto);
   }
+
+
+  @ApiOperation({ summary: 'Start Google OAuth' })
+  @Get('oauth/google')
+  @UseGuards(AuthGuard('google'))
+  googleAuthStart() {
+    // Guard will redirect to Google OAuth consent screen
+  }
+
+  @ApiOperation({ summary: 'Google OAuth callback' })
+  @Get('oauth/google/callback')
+  @UseGuards(AuthGuard('google'))
+  googleAuthPassportCallback(@Req() req: any) {
+    return req.user;
+  }
+
+
+  @ApiOperation({ summary: 'Start Kakao OAuth' })
+  @Get('oauth/kakao')
+  @UseGuards(AuthGuard('kakao'))
+  kakaoAuthStart() {
+    // Guard will redirect to Kakao OAuth consent screen
+  }
+
+  @ApiOperation({ summary: 'Kakao OAuth callback' })
+  @Get('oauth/kakao/callback')
+  @UseGuards(AuthGuard('kakao'))
+  kakaoAuthPassportCallback(@Req() req: any) {
+    return req.user;
+  }
+
+
 
   @ApiOperation({ summary: 'Refresh token' })
   @ApiBody({ type: RefreshTokenDto })
@@ -54,6 +89,8 @@ export class AuthController {
   refresh(@Body() refreshTokenDto: RefreshTokenDto) {
     return this.authService.refresh(refreshTokenDto);
   }
+
+
 
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiBearerAuth('access-token')
@@ -69,13 +106,13 @@ export class AuthController {
     return this.authService.me(req.user);
   }
 
-  @ApiOperation({ summary: 'Logout' })
-  @ApiBearerAuth('access-token')
-  @ApiOkResponse({ type: LogoutResponseDto })
-  @ApiUnauthorizedResponse({ description: 'Access token is missing or invalid' })
-  @UseGuards(AccessTokenGuard)
-  @Post('logout')
-  logout(@Req() req: AuthenticatedRequest) {
-    return this.authService.logout(req.user);
-  }
+  // @ApiOperation({ summary: 'Logout' })
+  // @ApiBearerAuth('access-token')
+  // @ApiOkResponse({ type: LogoutResponseDto })
+  // @ApiUnauthorizedResponse({ description: 'Access token is missing or invalid' })
+  // @UseGuards(AccessTokenGuard)
+  // @Post('logout')
+  // logout(@Req() req: AuthenticatedRequest) {
+  //   return this.authService.logout(req.user);
+  // }
 }
