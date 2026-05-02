@@ -23,7 +23,6 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { AccessTokenGuard } from './guards/access-token.guard';
 import type { AuthenticatedRequest } from './types/authenticated-request-types';
 import {
-  LogoutResponseDto,
   MeResponseDto,
   TokenPairResponseDto,
 } from './dto/auth-response.dto';
@@ -47,14 +46,14 @@ export class AuthController {
   }
 
 
-  @ApiOperation({ summary: 'Start Google OAuth' })
+  @ApiOperation({ summary: 'Google OAuth로 들어가는 endpoint' })
   @Get('oauth/google')
   @UseGuards(AuthGuard('google'))
   googleAuthStart() {
     // Guard will redirect to Google OAuth consent screen
   }
 
-  @ApiOperation({ summary: 'Google OAuth callback' })
+  @ApiOperation({ summary: 'Google OAuth callback(나오는 endpoint)' })
   @Get('oauth/google/callback')
   @UseGuards(AuthGuard('google'))
   googleAuthPassportCallback(@Req() req: any) {
@@ -62,20 +61,19 @@ export class AuthController {
   }
 
 
-  @ApiOperation({ summary: 'Start Kakao OAuth' })
+  @ApiOperation({ summary: 'Kakao OAuth로 들어가는 endpoint' })
   @Get('oauth/kakao')
   @UseGuards(AuthGuard('kakao'))
   kakaoAuthStart() {
     // Guard will redirect to Kakao OAuth consent screen
   }
 
-  @ApiOperation({ summary: 'Kakao OAuth callback' })
+  @ApiOperation({ summary: 'Kakao OAuth callback(나오는 endpoint)' })
   @Get('oauth/kakao/callback')
   @UseGuards(AuthGuard('kakao'))
   kakaoAuthPassportCallback(@Req() req: any) {
     return req.user;
   }
-
 
 
   @ApiOperation({ summary: 'Refresh token' })
@@ -105,14 +103,4 @@ export class AuthController {
 
     return this.authService.me(req.user);
   }
-
-  // @ApiOperation({ summary: 'Logout' })
-  // @ApiBearerAuth('access-token')
-  // @ApiOkResponse({ type: LogoutResponseDto })
-  // @ApiUnauthorizedResponse({ description: 'Access token is missing or invalid' })
-  // @UseGuards(AccessTokenGuard)
-  // @Post('logout')
-  // logout(@Req() req: AuthenticatedRequest) {
-  //   return this.authService.logout(req.user);
-  // }
 }

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { SessionType } from '@prisma/client';
+import { OAuthProvider, SessionType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -88,6 +88,75 @@ export class AuthRepository {
       data: {
         revokedAt: new Date(),
       },
+    });
+  }
+
+  async findEventById(id: string) {
+    return this.prisma.event.findUnique({ where: { id } });
+  }
+
+  async upsertOAuthUser(
+    provider: OAuthProvider,
+    profile: {
+      providerUserId: string;
+      email?: string | null;
+      displayName?: string | null;
+      profileImageUrl?: string | null;
+      accessToken?: string | null;
+      refreshToken?: string | null;
+    },
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const existingAccount = await tx.oAuthAccount.findUnique({
+        where: {
+          provider_providerUserId: {
+            provider,
+            providerUserId: profile.providerUserId,
+          },
+        },
+        include: { user: true },
+      });
+
+      if (existingAccount?.user) {
+        await tx.oAuthAccount.update({
+          where: { id: existingAccount.id },
+          data: {
+            email: profile.email,
+            displayName: profile.displayName,
+            profileImageUrl: profile.profileImageUrl,
+            accessToken: profile.accessToken,
+            refreshToken: profile.refreshToken,
+          },
+        });
+
+        return existingAccount.user;
+      }
+
+      const matchedUser = profile.email
+        ? await tx.user.findUnique({ where: { email: profile.email } })
+        : null;
+
+      const user = matchedUser ?? await tx.user.create({
+        data: {
+          email: profile.email,
+          name: profile.displayName,
+        },
+      });
+
+      await tx.oAuthAccount.create({
+        data: {
+          provider,
+          providerUserId: profile.providerUserId,
+          email: profile.email,
+          displayName: profile.displayName,
+          profileImageUrl: profile.profileImageUrl,
+          accessToken: profile.accessToken,
+          refreshToken: profile.refreshToken,
+          userId: user.id,
+        },
+      });
+
+      return user;
     });
   }
 }
