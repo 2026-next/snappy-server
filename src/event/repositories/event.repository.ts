@@ -6,29 +6,27 @@ import { CreateEventDto } from '../dto/create-event.dto';
 export class EventRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createEventDto: CreateEventDto) {
+  async createEvent(ownerId: string, createEventDto: CreateEventDto) {
     return this.prisma.event.create({
       data: {
         name: createEventDto.name,
         eventDate: new Date(createEventDto.eventDate),
-        ownerId: createEventDto.ownerId,
+        ownerId,
       },
     });
   }
 
-  async findAll() {
+  async findAllEventsByOwnerId(ownerId: string) {
     return this.prisma.event.findMany({
-      include: { owner: true },
-    });
-  }
-
-  async findOne(id: string) {
-    return this.prisma.event.findUnique({
-      where: { id },
-      include: {
-        owner: true,
-        photos: true,
-        messages: true,
+      where: { ownerId },
+      select: {
+        name: true,
+        eventDate: true,
+        owner: {
+          select: {
+            name: true,
+          },
+        },
       },
     });
   }

@@ -3,8 +3,8 @@ import { IsOptional, IsString, MinLength } from 'class-validator';
 
 export class UpdateUserDto {
   @ApiPropertyOptional({
-    description: 'User display name',
-    example: '민준',
+    description: 'User name',
+    example: '김민준',
   })
   @IsOptional()
   @IsString()

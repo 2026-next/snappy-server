@@ -18,11 +18,5 @@ export class CreateEventDto {
   @IsNotEmpty()
   eventDate!: string;
 
-  @ApiProperty({
-    description: '주최자(User)의 ID',
-    example: 'Event ID of the event owner',
-  })
-  @IsString()
-  @IsNotEmpty()
-  ownerId!: string;
+  // ownerId는 이벤트 생성 시 서버에서 자동으로 할당됨.
 }
