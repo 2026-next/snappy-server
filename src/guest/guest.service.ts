@@ -7,7 +7,10 @@ export class GuestService {
   constructor(private readonly guestRepository: GuestRepository) {}
 
   async checkNameExists(dto: CheckGuestNameDto) {
-    const guest = await this.guestRepository.findByEventIdAndName(dto.eventId, dto.name);
+    const guest = await this.guestRepository.findByEventIdAndName(
+      dto.eventId,
+      dto.name,
+    );
     return { available: !guest };
   }
 }

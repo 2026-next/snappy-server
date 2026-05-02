@@ -12,7 +12,13 @@ import { KakaoStrategy } from './strategies/kakao.strategy';
 @Module({
   imports: [PassportModule.register({}), JwtModule.register({}), PrismaModule],
   controllers: [AuthController],
-  providers: [AuthService, AccessTokenGuard, AuthRepository, GoogleStrategy, KakaoStrategy],
+  providers: [
+    AuthService,
+    AccessTokenGuard,
+    AuthRepository,
+    GoogleStrategy,
+    KakaoStrategy,
+  ],
   exports: [AccessTokenGuard, JwtModule],
 })
 export class AuthModule {}

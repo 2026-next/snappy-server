@@ -10,7 +10,9 @@ export class KakaoStrategy extends PassportStrategy(Strategy, 'kakao') {
     super({
       clientID: process.env.KAKAO_CLIENT_ID,
       clientSecret: process.env.KAKAO_CLIENT_SECRET,
-      callbackURL: process.env.KAKAO_CALLBACK_URL ?? 'http://localhost:3000/auth/oauth/kakao/callback',
+      callbackURL:
+        process.env.KAKAO_CALLBACK_URL ??
+        'http://localhost:3000/auth/oauth/kakao/callback',
       scope: ['account_email', 'profile_nickname', 'profile_image'],
     } as any);
   }
@@ -20,11 +22,15 @@ export class KakaoStrategy extends PassportStrategy(Strategy, 'kakao') {
       providerUserId: String(profile.id),
       email: profile._json?.kakao_account?.email ?? null,
       displayName: profile.displayName ?? null,
-      profileImageUrl: profile._json?.kakao_account?.profile?.profile_image_url ?? null,
+      profileImageUrl:
+        profile._json?.kakao_account?.profile?.profile_image_url ?? null,
       accessToken,
       refreshToken: refreshToken ?? null,
     };
 
-    return this.authService.oauthLoginWithProfile(OAuthProvider.KAKAO, profilePayload);
+    return this.authService.oauthLoginWithProfile(
+      OAuthProvider.KAKAO,
+      profilePayload,
+    );
   }
 }

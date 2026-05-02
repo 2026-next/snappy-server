@@ -11,7 +11,7 @@ export class GuestLoginDto {
   eventId!: string;
 
   @ApiProperty({
-    description: 'Guest\'s display name',
+    description: "Guest's display name",
     example: '김민준',
   })
   @IsString()
@@ -19,7 +19,7 @@ export class GuestLoginDto {
   name!: string;
 
   @ApiProperty({
-    description: 'Guest\'s password',
+    description: "Guest's password",
     example: '12345678',
   })
   @IsString()
