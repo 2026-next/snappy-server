@@ -3,41 +3,39 @@ import {
   UnauthorizedException,
   UnprocessableEntityException,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { OAuthProvider, SessionType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { GuestLoginDto } from './dto/guest-login.dto';
-// OAuth callback DTO removed — Passport strategies handle callbacks
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import {
   AccessTokenPayload,
   RefreshTokenPayload,
 } from './types/token-payload.types';
 import { AuthRepository } from './repositories/auth.repository';
-import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly authRepository: AuthRepository,
     private readonly jwtService: JwtService,
-    private readonly prisma: PrismaService,
   ) {}
 
   // Guest login with event ID, name, and password
   //
   async guestLogin(dto: GuestLoginDto) {
     // Validate that the event exists
-    const event = await this.prisma.event.findUnique({
-      where: { id: dto.eventId },
-    });
+    const event = await this.authRepository.findEventById(dto.eventId);
 
     if (!event) {
       throw new UnprocessableEntityException('Event not found');
     }
 
     const existingGuest = await this.authRepository.findGuestByEventIdAndName(dto.eventId, dto.name);
+
+    // If guest exists, verify password; if not, create new guest with hashed password
     const guest = existingGuest ?? (await this.authRepository.createGuest({
       eventId: dto.eventId,
       name: dto.name,
@@ -67,19 +65,16 @@ export class AuthService {
     });
   }
 
-  // Google uses Passport strategy; manual code-exchange removed.
-
+  // Google OAuth
+  //
   getGoogleOAuthAuthorizationUrl(redirectUri?: string) {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     if (!clientId) {
       throw new InternalServerErrorException('Google OAuth is not configured');
     }
 
-    // Manual URL builder removed — Passport redirect flow is used instead.
     throw new InternalServerErrorException('Google authorization URL is not available; use Passport endpoints');
   }
-
-  // Kakao is handled via Passport strategy now; manual code-exchange removed.
 
   // Refresh access token using a valid refresh token
   //
@@ -101,7 +96,7 @@ export class AuthService {
     const session = await this.authRepository.findAuthSessionByIdWithRelations(payload.sessionId);
 
     if (!session) {
-      throw new UnauthorizedException('Session not found');
+      throw new NotFoundException('Session not found');
     }
 
     if (session.revokedAt || session.expiresAt <= new Date()) {
@@ -148,13 +143,6 @@ export class AuthService {
     };
   }
 
-  async logout(payload: AccessTokenPayload) {
-    await this.authRepository.revokeAuthSession(payload.sessionId);
-    return { success: true };
-  }
-
-  // Manual oauthLogin removed — use `oauthLoginWithProfile` together with Passport strategies.
-
   // Similar to `oauthLogin` but accepts an already-fetched profile object
   async oauthLoginWithProfile(provider: OAuthProvider, profile: {
     providerUserId: string;
@@ -164,58 +152,7 @@ export class AuthService {
     accessToken?: string | null;
     refreshToken?: string | null;
   }) {
-    const user = await this.prisma.$transaction(async (tx) => {
-      const existingAccount = await tx.oAuthAccount.findUnique({
-        where: {
-          provider_providerUserId: {
-            provider,
-            providerUserId: profile.providerUserId,
-          },
-        },
-        include: { user: true },
-      });
-
-      if (existingAccount?.user) {
-        await tx.oAuthAccount.update({
-          where: { id: existingAccount.id },
-          data: {
-            email: profile.email,
-            displayName: profile.displayName,
-            profileImageUrl: profile.profileImageUrl,
-            accessToken: profile.accessToken,
-            refreshToken: profile.refreshToken,
-          },
-        });
-
-        return existingAccount.user;
-      }
-
-      const matchedUser = profile.email
-        ? await tx.user.findUnique({ where: { email: profile.email } })
-        : null;
-
-      const nextUser = matchedUser ?? await tx.user.create({
-        data: {
-          email: profile.email,
-          name: profile.displayName,
-        },
-      });
-
-      await tx.oAuthAccount.create({
-        data: {
-          provider,
-          providerUserId: profile.providerUserId,
-          email: profile.email,
-          displayName: profile.displayName,
-          profileImageUrl: profile.profileImageUrl,
-          accessToken: profile.accessToken,
-          refreshToken: profile.refreshToken,
-          userId: nextUser.id,
-        },
-      });
-
-      return nextUser;
-    });
+    const user = await this.authRepository.upsertOAuthUser(provider, profile);
 
     const refreshTokenExpiresInSeconds = this.getRefreshTokenExpiresInSeconds();
     const session = await this.authRepository.createAuthSession({
@@ -230,14 +167,6 @@ export class AuthService {
       sessionType: SessionType.USER,
       displayName: user.name ?? (profile.displayName ?? null),
     });
-  }
-
-  private async fetchOAuthProfile(
-    provider: OAuthProvider,
-    code: string,
-    redirectUri: string,
-  ) {
-    throw new InternalServerErrorException('Direct code-exchange is not supported; use Passport strategies for OAuth providers');
   }
 
   private async issueTokenPair(params: {
