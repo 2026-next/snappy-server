@@ -17,7 +17,11 @@ export class AuthRepository {
     });
   }
 
-  async createGuest(data: { eventId: string; name: string; passwordHash: string }) {
+  async createGuest(data: {
+    eventId: string;
+    name: string;
+    passwordHash: string;
+  }) {
     return this.prisma.guest.create({
       data: {
         eventId: data.eventId,
@@ -69,7 +73,11 @@ export class AuthRepository {
     });
   }
 
-  async updateAuthSessionRefreshToken(sessionId: string, refreshTokenHash: string, expiresAt: Date) {
+  async updateAuthSessionRefreshToken(
+    sessionId: string,
+    refreshTokenHash: string,
+    expiresAt: Date,
+  ) {
     return this.prisma.authSession.update({
       where: { id: sessionId },
       data: {
@@ -136,12 +144,14 @@ export class AuthRepository {
         ? await tx.user.findUnique({ where: { email: profile.email } })
         : null;
 
-      const user = matchedUser ?? await tx.user.create({
-        data: {
-          email: profile.email,
-          name: profile.displayName,
-        },
-      });
+      const user =
+        matchedUser ??
+        (await tx.user.create({
+          data: {
+            email: profile.email,
+            name: profile.displayName,
+          },
+        }));
 
       await tx.oAuthAccount.create({
         data: {

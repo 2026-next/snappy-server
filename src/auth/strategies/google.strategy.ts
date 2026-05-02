@@ -11,7 +11,8 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       callbackURL:
-        process.env.GOOGLE_CALLBACK_URL ?? 'http://localhost:3000/auth/oauth/google/callback',
+        process.env.GOOGLE_CALLBACK_URL ??
+        'http://localhost:3000/auth/oauth/google/callback',
       passReqToCallback: false,
       scope: ['openid', 'email', 'profile'],
     } as any);
@@ -28,6 +29,9 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       refreshToken: refreshToken ?? null,
     };
 
-    return this.authService.oauthLoginWithProfile(OAuthProvider.GOOGLE, profilePayload);
+    return this.authService.oauthLoginWithProfile(
+      OAuthProvider.GOOGLE,
+      profilePayload,
+    );
   }
 }

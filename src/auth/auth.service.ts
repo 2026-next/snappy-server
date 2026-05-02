@@ -33,14 +33,19 @@ export class AuthService {
       throw new UnprocessableEntityException('Event not found');
     }
 
-    const existingGuest = await this.authRepository.findGuestByEventIdAndName(dto.eventId, dto.name);
+    const existingGuest = await this.authRepository.findGuestByEventIdAndName(
+      dto.eventId,
+      dto.name,
+    );
 
     // If guest exists, verify password; if not, create new guest with hashed password
-    const guest = existingGuest ?? (await this.authRepository.createGuest({
-      eventId: dto.eventId,
-      name: dto.name,
-      passwordHash: await bcrypt.hash(dto.password, 10),
-    }));
+    const guest =
+      existingGuest ??
+      (await this.authRepository.createGuest({
+        eventId: dto.eventId,
+        name: dto.name,
+        passwordHash: await bcrypt.hash(dto.password, 10),
+      }));
 
     const isPasswordValid = existingGuest
       ? await bcrypt.compare(dto.password, guest.passwordHash)
@@ -73,7 +78,9 @@ export class AuthService {
       throw new InternalServerErrorException('Google OAuth is not configured');
     }
 
-    throw new InternalServerErrorException('Google authorization URL is not available; use Passport endpoints');
+    throw new InternalServerErrorException(
+      'Google authorization URL is not available; use Passport endpoints',
+    );
   }
 
   // Refresh access token using a valid refresh token
@@ -82,9 +89,12 @@ export class AuthService {
     let payload: RefreshTokenPayload;
 
     try {
-      payload = await this.jwtService.verifyAsync<RefreshTokenPayload>(dto.refreshToken, {
-        secret: this.getRefreshTokenSecret(),
-      });
+      payload = await this.jwtService.verifyAsync<RefreshTokenPayload>(
+        dto.refreshToken,
+        {
+          secret: this.getRefreshTokenSecret(),
+        },
+      );
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
     }
@@ -93,7 +103,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    const session = await this.authRepository.findAuthSessionByIdWithRelations(payload.sessionId);
+    const session = await this.authRepository.findAuthSessionByIdWithRelations(
+      payload.sessionId,
+    );
 
     if (!session) {
       throw new NotFoundException('Session not found');
@@ -107,13 +119,23 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token not set');
     }
 
-    const isRefreshTokenValid = await bcrypt.compare(dto.refreshToken, session.refreshTokenHash);
+    const isRefreshTokenValid = await bcrypt.compare(
+      dto.refreshToken,
+      session.refreshTokenHash,
+    );
     if (!isRefreshTokenValid) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    const subjectId = this.getSessionSubjectId(session.sessionType, session.userId, session.guestId);
-    const displayName = session.sessionType === SessionType.GUEST ? session.guest?.name ?? null : session.user?.name ?? null;
+    const subjectId = this.getSessionSubjectId(
+      session.sessionType,
+      session.userId,
+      session.guestId,
+    );
+    const displayName =
+      session.sessionType === SessionType.GUEST
+        ? (session.guest?.name ?? null)
+        : (session.user?.name ?? null);
 
     return this.issueTokenPair({
       subjectId,
@@ -124,7 +146,9 @@ export class AuthService {
   }
 
   async me(payload: AccessTokenPayload) {
-    const session = await this.authRepository.findAuthSessionByIdWithRelations(payload.sessionId);
+    const session = await this.authRepository.findAuthSessionByIdWithRelations(
+      payload.sessionId,
+    );
 
     if (!session || session.revokedAt) {
       throw new UnauthorizedException('Session is invalid');
@@ -144,14 +168,17 @@ export class AuthService {
   }
 
   // Similar to `oauthLogin` but accepts an already-fetched profile object
-  async oauthLoginWithProfile(provider: OAuthProvider, profile: {
-    providerUserId: string;
-    email?: string | null;
-    displayName?: string | null;
-    profileImageUrl?: string | null;
-    accessToken?: string | null;
-    refreshToken?: string | null;
-  }) {
+  async oauthLoginWithProfile(
+    provider: OAuthProvider,
+    profile: {
+      providerUserId: string;
+      email?: string | null;
+      displayName?: string | null;
+      profileImageUrl?: string | null;
+      accessToken?: string | null;
+      refreshToken?: string | null;
+    },
+  ) {
     const user = await this.authRepository.upsertOAuthUser(provider, profile);
 
     const refreshTokenExpiresInSeconds = this.getRefreshTokenExpiresInSeconds();
@@ -165,7 +192,7 @@ export class AuthService {
       subjectId: user.id,
       sessionId: session.id,
       sessionType: SessionType.USER,
-      displayName: user.name ?? (profile.displayName ?? null),
+      displayName: user.name ?? profile.displayName ?? null,
     });
   }
 

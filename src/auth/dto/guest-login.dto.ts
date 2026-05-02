@@ -4,14 +4,14 @@ import { ApiProperty } from '@nestjs/swagger';
 export class GuestLoginDto {
   @ApiProperty({
     description: 'Event ID that the guest belongs to',
-    example: 'event_1',
+    example: 'cmoohra6a000115zyl8cnomj2',
   })
   @IsString()
   @IsNotEmpty()
   eventId!: string;
 
   @ApiProperty({
-    description: 'Guest\'s display name',
+    description: "Guest's name",
     example: '김민준',
   })
   @IsString()
@@ -19,7 +19,7 @@ export class GuestLoginDto {
   name!: string;
 
   @ApiProperty({
-    description: 'Guest\'s password',
+    description: "Guest's password",
     example: '12345678',
   })
   @IsString()

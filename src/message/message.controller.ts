@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, UseGuards, Req } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
 import { MessageService } from './message.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
@@ -29,22 +40,19 @@ export class MessageController {
   @Patch(':id')
   @ApiOperation({ summary: '축하 메시지 수정' })
   update(
-  @Param('id') id: string, 
-  @Body() updateMessageDto: UpdateMessageDto,
-  @Req() req: AuthenticatedRequest
-  
-) {
-  // 임시로 테스트를 위해 특정 guestId를 넣거나, 
-  // Auth 기능이 완성되면 거기서 ID를 받아오도록 연결해야 합니다.
-  const guestId = req.user.sub; //'sub'이 하객의 ID
-  return this.messageService.update(id, updateMessageDto, guestId);
-}
+    @Param('id') id: string,
+    @Body() updateMessageDto: UpdateMessageDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    // 임시로 테스트를 위해 특정 guestId를 넣거나,
+    // Auth 기능이 완성되면 거기서 ID를 받아오도록 연결해야 합니다.
+    const guestId = req.user.sub; //'sub'이 하객의 ID
+    return this.messageService.update(id, updateMessageDto, guestId);
+  }
 
   @Delete(':id')
   @ApiOperation({ summary: '메시지 삭제' })
   remove(@Param('id') id: string) {
     return this.messageService.remove(id);
   }
-
-  
 }

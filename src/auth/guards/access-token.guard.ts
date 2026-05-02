@@ -50,8 +50,10 @@ export class AccessTokenGuard implements CanActivate {
     }
 
     const isSubjectValid =
-      (session.sessionType === SessionType.USER && session.userId === payload.sub) ||
-      (session.sessionType === SessionType.GUEST && session.guestId === payload.sub);
+      (session.sessionType === SessionType.USER &&
+        session.userId === payload.sub) ||
+      (session.sessionType === SessionType.GUEST &&
+        session.guestId === payload.sub);
 
     if (!isSubjectValid) {
       throw new UnauthorizedException('Session subject mismatch');

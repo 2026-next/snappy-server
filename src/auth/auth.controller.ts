@@ -10,6 +10,7 @@ import {
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -22,10 +23,7 @@ import { GuestLoginDto } from './dto/guest-login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { AccessTokenGuard } from './guards/access-token.guard';
 import type { AuthenticatedRequest } from './types/authenticated-request-types';
-import {
-  MeResponseDto,
-  TokenPairResponseDto,
-} from './dto/auth-response.dto';
+import { MeResponseDto, TokenPairResponseDto } from './dto/auth-response.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -34,7 +32,7 @@ export class AuthController {
 
   @ApiOperation({ summary: 'Guest login' })
   @ApiBody({ type: GuestLoginDto })
-  @ApiOkResponse({
+  @ApiCreatedResponse({
     description: 'Guest login succeeded and token issued',
     type: TokenPairResponseDto,
   })
@@ -44,7 +42,6 @@ export class AuthController {
   guestLogin(@Body() guestLoginDto: GuestLoginDto) {
     return this.authService.guestLogin(guestLoginDto);
   }
-
 
   @ApiOperation({ summary: 'Google OAuth로 들어가는 endpoint' })
   @Get('oauth/google')
@@ -60,7 +57,6 @@ export class AuthController {
     return req.user;
   }
 
-
   @ApiOperation({ summary: 'Kakao OAuth로 들어가는 endpoint' })
   @Get('oauth/kakao')
   @UseGuards(AuthGuard('kakao'))
@@ -75,25 +71,26 @@ export class AuthController {
     return req.user;
   }
 
-
   @ApiOperation({ summary: 'Refresh token' })
   @ApiBody({ type: RefreshTokenDto })
   @ApiOkResponse({
     description: 'New token issued from refresh token',
     type: TokenPairResponseDto,
   })
-  @ApiUnauthorizedResponse({ description: 'Refresh token is invalid or expired' })
+  @ApiUnauthorizedResponse({
+    description: 'Refresh token is invalid or expired',
+  })
   @Post('refresh')
   refresh(@Body() refreshTokenDto: RefreshTokenDto) {
     return this.authService.refresh(refreshTokenDto);
   }
 
-
-
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiBearerAuth('access-token')
   @ApiOkResponse({ type: MeResponseDto })
-  @ApiUnauthorizedResponse({ description: 'Access token is missing or invalid' })
+  @ApiUnauthorizedResponse({
+    description: 'Access token is missing or invalid',
+  })
   @UseGuards(AccessTokenGuard)
   @Get('me')
   me(@Req() req: AuthenticatedRequest) {
