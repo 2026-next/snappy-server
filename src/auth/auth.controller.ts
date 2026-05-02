@@ -10,6 +10,7 @@ import {
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -31,7 +32,7 @@ export class AuthController {
 
   @ApiOperation({ summary: 'Guest login' })
   @ApiBody({ type: GuestLoginDto })
-  @ApiOkResponse({
+  @ApiCreatedResponse({
     description: 'Guest login succeeded and token issued',
     type: TokenPairResponseDto,
   })
