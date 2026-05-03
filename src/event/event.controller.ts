@@ -14,12 +14,12 @@ import {
   ApiOkResponse,
   ApiOperation,
   ApiTags,
-  ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { EventService } from './event.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request-types';
+import { access } from 'fs';
 
 @ApiTags('Event')
 @Controller('event')
@@ -38,6 +38,8 @@ export class EventController {
         createdAt: '2024-06-01T12:00:00.000Z',
         updatedAt: '2024-06-01T12:00:00.000Z',
         ownerId: 'user-uuid',
+        accessCode: 'access_event-uuid',
+        qrLink: 'http://localhost:3000/guest/join/access_event-uuid',
       },
     },
   })

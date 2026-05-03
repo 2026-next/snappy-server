@@ -6,7 +6,13 @@
 
 */
 -- AlterTable
-ALTER TABLE "Event" ADD COLUMN     "accessCode" TEXT NOT NULL;
+ALTER TABLE "Event" ADD COLUMN     "accessCode" TEXT;
+
+-- Update existing rows with unique values
+UPDATE "Event" SET "accessCode" = concat('access_', "id") WHERE "accessCode" IS NULL;
+
+-- Make column NOT NULL and add unique constraint
+ALTER TABLE "Event" ALTER COLUMN "accessCode" SET NOT NULL;
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Event_accessCode_key" ON "Event"("accessCode");
