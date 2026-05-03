@@ -30,4 +30,12 @@ export class EventRepository {
       },
     });
   }
+
+  async findEventByAccessCode(accessCode: string) {
+    return this.prisma.event.findUnique({
+      where: { accessCode },
+    });
+  }
 }
+
+
