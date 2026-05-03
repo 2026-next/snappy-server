@@ -30,6 +30,20 @@ import { MeResponseDto, TokenPairResponseDto } from './dto/auth-response.dto';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @ApiOperation({ summary: 'Guest registration' })
+  @ApiBody({ type: GuestLoginDto })
+  @ApiCreatedResponse({
+    description: 'Guest account created and token issued',
+    type: TokenPairResponseDto,
+  })
+  @ApiUnprocessableEntityResponse({
+    description: 'Event not found or guest name already exists',
+  })
+  @Post('guest/register')
+  guestRegister(@Body() guestLoginDto: GuestLoginDto) {
+    return this.authService.guestRegister(guestLoginDto);
+  }
+
   @ApiOperation({ summary: 'Guest login' })
   @ApiBody({ type: GuestLoginDto })
   @ApiCreatedResponse({

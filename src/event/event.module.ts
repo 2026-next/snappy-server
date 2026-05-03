@@ -10,5 +10,6 @@ import { JwtModule } from '@nestjs/jwt';
   imports: [PrismaModule, JwtModule.register({})],
   controllers: [EventController],
   providers: [EventService, EventRepository, AccessTokenGuard],
+  exports: [EventRepository],
 })
 export class EventModule {}

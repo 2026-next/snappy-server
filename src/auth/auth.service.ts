@@ -23,7 +23,50 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  // Guest login with event ID, name, and password
+  // Guest registration - create new guest account
+  //
+  async guestRegister(dto: GuestLoginDto) {
+    // Validate that the event exists
+    const event = await this.authRepository.findEventById(dto.eventId);
+
+    if (!event) {
+      throw new UnprocessableEntityException('Event not found');
+    }
+
+    // Check if guest already exists
+    const existingGuest = await this.authRepository.findGuestByEventIdAndName(
+      dto.eventId,
+      dto.name,
+    );
+
+    if (existingGuest) {
+      throw new UnprocessableEntityException(
+        'Guest with this name already exists in this event',
+      );
+    }
+
+    const guest = await this.authRepository.createGuest({
+      eventId: dto.eventId,
+      name: dto.name,
+      passwordHash: await bcrypt.hash(dto.password, 10),
+    });
+
+    const refreshTokenExpiresInSeconds = this.getRefreshTokenExpiresInSeconds();
+    const session = await this.authRepository.createAuthSession({
+      sessionType: SessionType.GUEST,
+      guestId: guest.id,
+      expiresAt: new Date(Date.now() + refreshTokenExpiresInSeconds * 1000),
+    });
+
+    return this.issueTokenPair({
+      subjectId: guest.id,
+      sessionId: session.id,
+      sessionType: SessionType.GUEST,
+      displayName: guest.name,
+    });
+  }
+
+  // Guest login - authenticate existing guest account
   //
   async guestLogin(dto: GuestLoginDto) {
     // Validate that the event exists
@@ -33,23 +76,21 @@ export class AuthService {
       throw new UnprocessableEntityException('Event not found');
     }
 
-    const existingGuest = await this.authRepository.findGuestByEventIdAndName(
+    const guest = await this.authRepository.findGuestByEventIdAndName(
       dto.eventId,
       dto.name,
     );
 
-    // If guest exists, verify password; if not, create new guest with hashed password
-    const guest =
-      existingGuest ??
-      (await this.authRepository.createGuest({
-        eventId: dto.eventId,
-        name: dto.name,
-        passwordHash: await bcrypt.hash(dto.password, 10),
-      }));
+    if (!guest) {
+      throw new UnauthorizedException(
+        'Invalid guest credentials: account does not exist',
+      );
+    }
 
-    const isPasswordValid = existingGuest
-      ? await bcrypt.compare(dto.password, guest.passwordHash)
-      : true;
+    const isPasswordValid = await bcrypt.compare(
+      dto.password,
+      guest.passwordHash,
+    );
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid guest credentials');

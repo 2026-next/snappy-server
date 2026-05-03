@@ -19,7 +19,6 @@ import { EventService } from './event.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request-types';
-import { access } from 'fs';
 
 @ApiTags('Event')
 @Controller('event')
