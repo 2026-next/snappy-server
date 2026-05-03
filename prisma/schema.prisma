@@ -61,6 +61,7 @@ model Event {
   guests    Guest[]
   photos    Photo[]
   messages  Message[]
+  accessCode  String   @unique @default(nanoid())
 
   @@index([ownerId, eventDate])
 }
@@ -100,6 +101,7 @@ model Photo {
   event               Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
   uploadedByGuestId   String?
   uploadedByGuest     Guest?    @relation("GuestUploader", fields: [uploadedByGuestId], references: [id], onDelete: SetNull)
+  embedding         Float[]
 
   @@index([eventId, uploadedAt])
   @@index([eventId, isDeleted, uploadedAt])
