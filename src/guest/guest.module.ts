@@ -4,9 +4,10 @@ import { GuestService } from './guest.service';
 import { GuestController } from './guest.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { GuestRepository } from './repositories/guest.repository';
+import { EventModule } from '../event/event.module';
 
 @Module({
-  imports: [PrismaModule, JwtModule.register({})],
+  imports: [PrismaModule, JwtModule.register({}), EventModule],
   controllers: [GuestController],
   providers: [GuestService, GuestRepository],
   exports: [GuestService],
