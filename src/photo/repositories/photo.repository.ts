@@ -22,6 +22,7 @@ export class PhotoRepository {
     });
   }
 
+<<<<<<< HEAD
   // 코사인 유사도로 내 얼굴과 닮은 사진 찾기
   async findSimilarPhotos(
     targetEmbedding: number[],
@@ -42,3 +43,64 @@ export class PhotoRepository {
     `;
   }
 }
+=======
+  // [기능] 특정 이벤트의 모든 사진 가져오기 (타임라인/즐겨찾기 필터 포함)
+  async findAllByEvent(eventId: string, onlyFavorites: boolean = false) {
+    return this.prisma.photo.findMany({
+      where: {
+        eventId,
+        ...(onlyFavorites && { isFavorite: true }), // 즐겨찾기 필터링
+      },
+      include: {
+        uploadedByGuest: { // 업로더 정보를 가져오기 위해 연결
+          select: { name: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }, // 타임라인(최신순) 정렬
+    });
+  }
+
+  // [기능] 즐겨찾기 토글 (상태 반전)
+  async toggleFavorite(photoId: string) {
+    const photo = await this.prisma.photo.findUnique({ where: { id: photoId } });
+    return this.prisma.photo.update({
+      where: { id: photoId },
+      data: { isFavorite: !photo?.isFavorite },
+    });
+  }
+
+
+  async findPhotosByGuest(guestId: string, eventId: string) {
+    return this.prisma.photo.findMany({
+      where: {
+        uploadedByGuestId: guestId,
+        eventId: eventId,
+      },
+      orderBy: { createdAt: 'desc' }, // 최신순
+    });
+  }
+
+  async findOne(id: string) {
+    return this.prisma.photo.findUnique({
+      where: { id },
+    });
+  }
+
+  async deletePhoto(id: string) {
+    return this.prisma.photo.delete({
+      where: { id },
+    });
+  }
+
+  async findEmbeddingsByEvent(eventId: string) {
+  return this.prisma.photo.findMany({
+    where: { eventId },
+    select: {
+      id: true,
+      originalObjectKey: true,
+      embedding: true,
+    },
+  });
+}
+}
+>>>>>>> d278f89 (feat: 사진 업로드 및 구도 그룹핑 기능 구현)

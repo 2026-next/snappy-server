@@ -113,6 +113,7 @@ model Photo {
   uploadedByGuestId   String?
   uploadedByGuest     Guest?    @relation("GuestUploader", fields: [uploadedByGuestId], references: [id], onDelete: SetNull)
   embedding         Float[]
+  isFavorite Boolean @default(false)
 
   @@index([eventId, uploadedAt])
   @@index([eventId, isDeleted, uploadedAt])
