@@ -9,21 +9,13 @@ import { PhotoController } from './photo.controller';
 
 @Injectable()
 export class PhotoService {
-<<<<<<< HEAD
-  constructor(private readonly photoRepository: PhotoRepository) {}
-
-  // 사진 업로드 시 가상의 임베딩 생성 및 저장 테스트
-  async uploadPhoto(eventId: string, guestId: string, url: string) {
-    // 실제로는 여기서 AI 모델을 호출해야 하지만, 지금은 128차원 랜덤 벡터를 생성합니다.
-    const dummyEmbedding = Array.from({ length: 128 }, () => Math.random());
-=======
-  private readonly storage: Storage;
+    private readonly storage: Storage;
   private readonly bucketName: string;
 
   constructor(private readonly photoRepository: PhotoRepository) {
     // GCS 초기화: GOOGLE_APPLICATION_CREDENTIALS 환경변수를 자동으로 읽습니다.
     this.storage = new Storage();
-    this.bucketName = process.env.GCP_STORAGE_BUCKET || ''; //나중에 수정
+    this.bucketName = process.env.GCP_STORAGE_BUCKET || ''; //나중에 수정!!!
   }
 
   // [기능 1] 하객에게 사진 업로드용 티켓(Signed URL) 발급
@@ -51,17 +43,10 @@ export class PhotoService {
     
     // 임베딩이 없다면 임시로 생성 (나중에 AI 엔진 연결 시 제거)
     const finalEmbedding = embedding || Array.from({ length: 128 }, () => Math.random());
->>>>>>> d278f89 (feat: 사진 업로드 및 구도 그룹핑 기능 구현)
-
+    
     return this.photoRepository.createPhoto(
       eventId,
-      guestId,
-<<<<<<< HEAD
-      url,
-      dummyEmbedding,
-    );
-=======
-      fileKey, // GCS 경로
+      guestId, fileKey, // GCS 경로
       finalEmbedding,
     );
   }
@@ -69,9 +54,7 @@ export class PhotoService {
   //******************************* guest 기능 ************************************************
   // [기능] 하객 본인의 사진들만 조회
   async findAllByGuest(guestId: string, eventId: string) {
-    return this.photoRepository.findPhotosByGuest(guestId, eventId);
->>>>>>> d278f89 (feat: 사진 업로드 및 구도 그룹핑 기능 구현)
-  }
+    return this.photoRepository.findPhotosByGuest(guestId, eventId);}
 
   // [기능] 사진 삭제 (본인인지 확인 필수)
   async remove(photoId: string, guestId: string) {
