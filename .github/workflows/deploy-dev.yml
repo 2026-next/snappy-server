@@ -1,0 +1,71 @@
+name: Deploy dev to snappy-vm
+
+on:
+  push:
+    branches:
+      - dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-dev-snappy-vm
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run prisma:generate
+
+      - name: Build
+        run: npm run build
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: verify
+    environment: dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Copy deploy script to snappy-vm
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SNAPPY_VM_HOST }}
+          username: ${{ secrets.SNAPPY_VM_USER }}
+          key: ${{ secrets.SNAPPY_VM_SSH_KEY }}
+          port: ${{ secrets.SNAPPY_VM_SSH_PORT || 22 }}
+          source: scripts/deploy-dev.sh
+          target: /tmp/snappy-server-deploy
+          overwrite: true
+
+      - name: Deploy on snappy-vm
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          APP_DIR: /home/jmkim/snappy-server
+          RESTART_COMMAND: pm2 restart snappy-server
+        with:
+          host: ${{ secrets.SNAPPY_VM_HOST }}
+          username: ${{ secrets.SNAPPY_VM_USER }}
+          key: ${{ secrets.SNAPPY_VM_SSH_KEY }}
+          port: ${{ secrets.SNAPPY_VM_SSH_PORT || 22 }}
+          envs: APP_DIR,RESTART_COMMAND
+          script: bash /tmp/snappy-server-deploy/scripts/deploy-dev.sh

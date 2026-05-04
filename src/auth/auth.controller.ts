@@ -20,6 +20,7 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { GuestLoginDto } from './dto/guest-login.dto';
+import { GuestRegisterDto } from './dto/guest-register.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { AccessTokenGuard } from './guards/access-token.guard';
 import type { AuthenticatedRequest } from './types/authenticated-request-types';
@@ -31,7 +32,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @ApiOperation({ summary: 'Guest registration' })
-  @ApiBody({ type: GuestLoginDto })
+  @ApiBody({ type: GuestRegisterDto })
   @ApiCreatedResponse({
     description: 'Guest account created and token issued',
     type: TokenPairResponseDto,
@@ -40,8 +41,8 @@ export class AuthController {
     description: 'Event not found or guest name already exists',
   })
   @Post('guest/register')
-  guestRegister(@Body() guestLoginDto: GuestLoginDto) {
-    return this.authService.guestRegister(guestLoginDto);
+  guestRegister(@Body() guestRegisterDto: GuestRegisterDto) {
+    return this.authService.guestRegister(guestRegisterDto);
   }
 
   @ApiOperation({ summary: 'Guest login' })

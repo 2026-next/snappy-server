@@ -6,8 +6,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { OAuthProvider, SessionType } from '@prisma/client';
+import {
+  GuestRelation as PrismaGuestRelation,
+  OAuthProvider,
+  SessionType,
+} from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import { GuestRegisterDto, GuestRelationCode } from './dto/guest-register.dto';
 import { GuestLoginDto } from './dto/guest-login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import {
@@ -15,6 +20,19 @@ import {
   RefreshTokenPayload,
 } from './types/token-payload.types';
 import { AuthRepository } from './repositories/auth.repository';
+
+const GUEST_RELATION_CODE_TO_PRISMA: Record<
+  GuestRelationCode,
+  PrismaGuestRelation
+> = {
+  [GuestRelationCode.PARENT]: PrismaGuestRelation.PARENT,
+  [GuestRelationCode.FRIEND]: PrismaGuestRelation.FRIEND,
+  [GuestRelationCode.SIBLING]: PrismaGuestRelation.SIBLING,
+  [GuestRelationCode.RELATIVE]: PrismaGuestRelation.RELATIVE,
+  [GuestRelationCode.COWORKER]: PrismaGuestRelation.COWORKER,
+  [GuestRelationCode.ACQUAINTANCE]: PrismaGuestRelation.ACQUAINTANCE,
+  [GuestRelationCode.OTHER]: PrismaGuestRelation.OTHER,
+};
 
 @Injectable()
 export class AuthService {
@@ -25,7 +43,7 @@ export class AuthService {
 
   // Guest registration - create new guest account
   //
-  async guestRegister(dto: GuestLoginDto) {
+  async guestRegister(dto: GuestRegisterDto) {
     // Validate that the event exists
     const event = await this.authRepository.findEventById(dto.eventId);
 
@@ -49,6 +67,7 @@ export class AuthService {
       eventId: dto.eventId,
       name: dto.name,
       passwordHash: await bcrypt.hash(dto.password, 10),
+      relation: GUEST_RELATION_CODE_TO_PRISMA[dto.relation],
     });
 
     const refreshTokenExpiresInSeconds = this.getRefreshTokenExpiresInSeconds();
@@ -113,7 +132,7 @@ export class AuthService {
 
   // Google OAuth
   //
-  getGoogleOAuthAuthorizationUrl(redirectUri?: string) {
+  getGoogleOAuthAuthorizationUrl() {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     if (!clientId) {
       throw new InternalServerErrorException('Google OAuth is not configured');
