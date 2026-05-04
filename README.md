@@ -49,20 +49,21 @@ $ npm run start:prod
 This project uses Passport Google strategy endpoints:
 
 - `GET /auth/oauth/google` (starts Google consent redirect)
-- `GET /auth/oauth/google/passport/callback` (Google callback, returns token pair JSON)
+- `GET /auth/oauth/google/callback` (Google callback, redirects to the SPA with token query params)
 
 Quick test steps:
 
 1. Start server and open Swagger UI.
 2. Call `GET /auth/oauth/google` from Swagger (or open it directly in browser).
 3. Complete Google login/consent.
-4. You will be redirected to `GET /auth/oauth/google/passport/callback` and receive access/refresh tokens as JSON.
+4. You will be redirected to `GET /auth/oauth/google/callback`, then the backend redirects to `${FRONTEND_ORIGIN}/auth/oauth/google/callback` with `accessToken`, `refreshToken`, and `tokenType` query params.
 
 Required env vars:
 
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_CLIENT_SECRET`
-- Optional: `GOOGLE_CALLBACK_URL` (default: `http://localhost:3000/auth/oauth/google/passport/callback`)
+- Optional: `GOOGLE_CALLBACK_URL` (default: `http://localhost:3000/auth/oauth/google/callback`)
+- Optional: `FRONTEND_ORIGIN` (default: `http://localhost:5174`)
 
 ## Development with Docker
 

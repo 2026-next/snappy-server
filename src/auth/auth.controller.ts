@@ -4,6 +4,7 @@ import {
   Get,
   Post,
   Req,
+  Res,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
@@ -18,6 +19,7 @@ import {
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
+import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { GuestLoginDto } from './dto/guest-login.dto';
 import { GuestRegisterDto } from './dto/guest-register.dto';
@@ -25,6 +27,12 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { AccessTokenGuard } from './guards/access-token.guard';
 import type { AuthenticatedRequest } from './types/authenticated-request-types';
 import { MeResponseDto, TokenPairResponseDto } from './dto/auth-response.dto';
+
+type OAuthProviderCallback = 'google' | 'kakao';
+
+interface OAuthCallbackRequest extends Request {
+  user: TokenPairResponseDto;
+}
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -68,8 +76,11 @@ export class AuthController {
   @ApiOperation({ summary: 'Google OAuth callback(나오는 endpoint)' })
   @Get('oauth/google/callback')
   @UseGuards(AuthGuard('google'))
-  googleAuthPassportCallback(@Req() req: any) {
-    return req.user;
+  googleAuthPassportCallback(
+    @Req() req: OAuthCallbackRequest,
+    @Res() res: Response,
+  ): void {
+    this.redirectOAuthCallback('google', req.user, res);
   }
 
   @ApiOperation({ summary: 'Kakao OAuth로 들어가는 endpoint' })
@@ -82,8 +93,11 @@ export class AuthController {
   @ApiOperation({ summary: 'Kakao OAuth callback(나오는 endpoint)' })
   @Get('oauth/kakao/callback')
   @UseGuards(AuthGuard('kakao'))
-  kakaoAuthPassportCallback(@Req() req: any) {
-    return req.user;
+  kakaoAuthPassportCallback(
+    @Req() req: OAuthCallbackRequest,
+    @Res() res: Response,
+  ): void {
+    this.redirectOAuthCallback('kakao', req.user, res);
   }
 
   @ApiOperation({ summary: 'Refresh token' })
@@ -114,5 +128,26 @@ export class AuthController {
     }
 
     return this.authService.me(req.user);
+  }
+
+  private redirectOAuthCallback(
+    provider: OAuthProviderCallback,
+    tokens: TokenPairResponseDto,
+    res: Response,
+  ): void {
+    const frontendOrigin =
+      process.env.FRONTEND_ORIGIN ?? 'http://localhost:5174';
+    const redirectUrl = new URL(
+      `/auth/oauth/${provider}/callback`,
+      frontendOrigin,
+    );
+
+    redirectUrl.search = new URLSearchParams({
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      tokenType: tokens.tokenType,
+    }).toString();
+
+    res.redirect(303, redirectUrl.toString());
   }
 }
