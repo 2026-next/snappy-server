@@ -7,10 +7,13 @@ export class EventService {
   constructor(private readonly eventRepository: EventRepository) {}
 
   async createEvent(ownerId: string, createEventDto: CreateEventDto) {
-    const event = await this.eventRepository.createEvent(ownerId, createEventDto);
-    
+    const event = await this.eventRepository.createEvent(
+      ownerId,
+      createEventDto,
+    );
+
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    
+
     return {
       ...event,
       qrLink: `${baseUrl}/guest/join/${event.accessCode}`,

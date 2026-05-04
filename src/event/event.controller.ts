@@ -67,7 +67,7 @@ export class EventController {
           owner: {
             name: 'owner name',
           },
-        }
+        },
       ],
     },
   })
