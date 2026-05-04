@@ -21,6 +21,16 @@ enum SessionType {
   GUEST
 }
 
+enum GuestRelation {
+  PARENT
+  FRIEND
+  SIBLING
+  RELATIVE
+  COWORKER
+  ACQUAINTANCE
+  OTHER
+}
+
 model User {
   id            String         @id @default(cuid())
   email         String?        @unique
@@ -74,6 +84,7 @@ model Guest {
   updatedAt     DateTime      @updatedAt
   eventId       String
   event         Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  relation      GuestRelation @default(OTHER)
   uploadedPhotos Photo[]      @relation("GuestUploader")
   messages      Message[]     @relation("GuestMessageAuthor")
   sessions      AuthSession[] @relation("GuestSession")

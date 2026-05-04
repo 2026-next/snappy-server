@@ -154,6 +154,19 @@ npm run start:prod
 
 Because the app and database are on the same VM, do not expose port `5432` publicly unless you really need to.
 
+### Automatic dev deployment
+
+Merges or pushes to the `dev` branch trigger `.github/workflows/deploy-dev.yml`. The workflow installs dependencies, generates Prisma client code, builds, SSHes into `snappy-vm`, fast-forwards the repository there to `origin/dev`, runs Prisma migrations, builds again on the VM, and then runs the configured restart command.
+
+Configure these GitHub Actions environment secrets in the `dev` environment:
+
+- `SNAPPY_VM_HOST`: `35.216.57.30`
+- `SNAPPY_VM_USER`: `jmkim`
+- `SNAPPY_VM_SSH_KEY`: private SSH key contents from `C:\Users\jefft\.ssh\jmkim_key`
+- `SNAPPY_VM_SSH_PORT`: optional SSH port; defaults to `22`
+
+The workflow deploys from `/home/jmkim/snappy-server` and restarts the app with `pm2 restart snappy-server`.
+
 ## Resources
 
 Check out a few resources that may come in handy when working with NestJS:

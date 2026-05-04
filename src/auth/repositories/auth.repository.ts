@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { GuestRelation } from '@prisma/client';
 import { OAuthProvider, SessionType } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -21,12 +22,14 @@ export class AuthRepository {
     eventId: string;
     name: string;
     passwordHash: string;
+    relation?: GuestRelation;
   }) {
     return this.prisma.guest.create({
       data: {
         eventId: data.eventId,
         name: data.name,
         passwordHash: data.passwordHash,
+        relation: data.relation,
       },
     });
   }
