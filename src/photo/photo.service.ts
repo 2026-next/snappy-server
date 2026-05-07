@@ -1,151 +1,291 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { CreatePhotoDto } from './dto/create-photo.dto';
-import { UpdatePhotoDto } from './dto/update-photo.dto';
 import { PhotoRepository } from './repositories/photo.repository';
-import { Storage } from '@google-cloud/storage';
-import { v4 as uuidv4 } from 'uuid';
+import { StorageService } from '../storage/storage.service';
 
-import { PhotoController } from './photo.controller';
+const PAGE_SIZE = 20;
+const COMPOSITION_THRESHOLD = 0.85;
+const SUPPORTED_IMAGE_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+]);
+
+type CompositionPhoto = Awaited<
+  ReturnType<PhotoRepository['findEmbeddingsByEvent']>
+>[number];
 
 @Injectable()
 export class PhotoService {
-    private readonly storage: Storage;
-  private readonly bucketName: string;
+  constructor(
+    private readonly photoRepository: PhotoRepository,
+    private readonly storageService: StorageService,
+  ) {}
 
-  constructor(private readonly photoRepository: PhotoRepository) {
-    // GCS 초기화: GOOGLE_APPLICATION_CREDENTIALS 환경변수를 자동으로 읽습니다.
-    this.storage = new Storage();
-    this.bucketName = process.env.GCP_STORAGE_BUCKET || ''; //나중에 수정!!!
+  async getSignedUrls(guestId: string, mimeType: string, fileCount: number) {
+    const guest = await this.getGuestOrThrow(guestId);
+    this.assertSupportedMimeType(mimeType);
+
+    return {
+      uploadUrls: await this.storageService.createUploadSignedUrls(
+        guest.eventId,
+        guestId,
+        mimeType,
+        fileCount,
+      ),
+    };
   }
 
-  // [기능 1] 하객에게 사진 업로드용 티켓(Signed URL) 발급
-  async getSignedUrl(eventId: string, guestId: string, mimeType: string) {
-    try {
-      const fileName = `events/${eventId}/${guestId}/${uuidv4()}`;
-      const blob = this.storage.bucket(this.bucketName).file(fileName);
-
-      const [url] = await blob.getSignedUrl({
-        version: 'v4',
-        action: 'write',
-        expires: Date.now() + 5 * 60 * 1000, // 5분
-        contentType: mimeType,
-      });
-
-      return { uploadUrl: url, fileKey: fileName };
-    } catch (error) {
-      throw new InternalServerErrorException('GCS 주소 생성 실패');
-    }
-  }
-
-  // [기능 2] 업로드 완료 후 DB에 기록
   async create(guestId: string, createPhotoDto: CreatePhotoDto) {
-    const { eventId, fileKey, embedding } = createPhotoDto;
-    
-    // 임베딩이 없다면 임시로 생성 (나중에 AI 엔진 연결 시 제거)
-    const finalEmbedding = embedding || Array.from({ length: 128 }, () => Math.random());
-    
-    return this.photoRepository.createPhoto(
-      eventId,
-      guestId, fileKey, // GCS 경로
-      finalEmbedding,
+    const guest = await this.getGuestOrThrow(guestId);
+    this.assertValidGuestFileKey(
+      createPhotoDto.fileKey,
+      guest.eventId,
+      guestId,
     );
+
+    if (createPhotoDto.mimeType) {
+      this.assertSupportedMimeType(createPhotoDto.mimeType);
+    }
+
+    try {
+      return this.photoRepository.createPhoto({
+        eventId: guest.eventId,
+        guestId,
+        originalObjectKey: createPhotoDto.fileKey,
+        mimeType: createPhotoDto.mimeType,
+        fileSizeBytes: createPhotoDto.fileSizeBytes,
+        width: createPhotoDto.width,
+        height: createPhotoDto.height,
+        exifTakenAt: createPhotoDto.exifTakenAt
+          ? new Date(createPhotoDto.exifTakenAt)
+          : undefined,
+        embedding: createPhotoDto.embedding ?? [],
+      });
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictException('Photo metadata already exists');
+      }
+
+      throw error;
+    }
   }
-  
-  //******************************* guest 기능 ************************************************
-  // [기능] 하객 본인의 사진들만 조회
-  async findAllByGuest(guestId: string, eventId: string) {
-    return this.photoRepository.findPhotosByGuest(guestId, eventId);}
 
-  // [기능] 사진 삭제 (본인인지 확인 필수)
+  async findAllByGuest(guestId: string) {
+    const guest = await this.getGuestOrThrow(guestId);
+    return this.photoRepository.findPhotosByGuest(guestId, guest.eventId);
+  }
+
   async remove(photoId: string, guestId: string) {
-    // 1. 먼저 해당 사진이 있는지, 누가 올렸는지 확인
-    const photo = await this.photoRepository.findOne(photoId);
-    
+    const guest = await this.getGuestOrThrow(guestId);
+    const photo = await this.photoRepository.findGuestPhoto(
+      photoId,
+      guestId,
+      guest.eventId,
+    );
+
     if (!photo) {
-      throw new Error('사진을 찾을 수 없습니다.');
+      throw new NotFoundException('Photo not found');
     }
 
-    // 2. 사진을 올린 사람과 삭제 요청자가 다르면 에러
-    if (photo.uploadedByGuestId !== guestId) {
-      throw new Error('본인이 올린 사진만 삭제할 수 있습니다.');
+    if (photo.isDownloaded) {
+      return {
+        photo,
+        deleted: false,
+        warning: '신랑/신부가 이미 사진을 다운받았을 수도 있습니다.',
+      };
     }
+
+    await this.storageService.deleteObject(photo.originalObjectKey);
 
     return this.photoRepository.deletePhoto(photoId);
   }
 
-  //******************************** user 기능 ****************************************************
-  // [기능] 전체 앨범 조회 (필터 및 그룹화 대응)
-  async getFullAlbum(eventId: string, mode: 'timeline' | 'uploader' | 'favorite' | 'composition') {
-    const photos = await this.photoRepository.findAllByEvent(eventId, mode === 'favorite');
-    
-    //비슷한 구도
-    if (mode === 'composition') {
-    return this.getGroupedByComposition(eventId);
-  }
-
-    // 업로더(Guest)별로 사진 그룹화
-    if (mode === 'uploader') {
-      
-      return photos.reduce((acc, photo) => {
-        const uploaderName = photo.uploadedByGuest?.name || '익명';
-        if (!acc[uploaderName]) acc[uploaderName] = [];
-        acc[uploaderName].push(photo);
-        return acc;
-      }, {} as Record<string, any[]>);
-    }
-
-    return photos;
-  }
-
-  // [기능] 즐겨찾기 토글
-  async toggleFavorite(photoId: string) {
-    return this.photoRepository.toggleFavorite(photoId);
-  }
-
-  // 비슷한 구도(임베딩 유사도)끼리 사진 그룹핑
-async getGroupedByComposition(eventId: string) {
-  const photos = await this.photoRepository.findEmbeddingsByEvent(eventId);
-  if (photos.length === 0) return {};
-
-  const groups: Record<string, any[]> = {};
-  const visited = new Set<string>();
-  const THRESHOLD = 0.85; // 유사도 기준 (0.85 이상이면 같은 구도로 판단)
-
-  let groupCount = 1;
-
-  for (let i = 0; i < photos.length; i++) {
-    if (visited.has(photos[i].id)) continue;
-
-    const currentGroup = [photos[i]];
-    visited.add(photos[i].id);
-
-    for (let j = i + 1; j < photos.length; j++) {
-      if (visited.has(photos[j].id)) continue;
-
-      // 코사인 유사도 계산 (TypeScript 버전)
-      const similarity = this.calculateCosineSimilarity(
-        photos[i].embedding as number[],
-        photos[j].embedding as number[]
+  async getFullAlbum(
+    userId: string,
+    eventId: string,
+    offset: number,
+    page: number,
+    order: 'asc' | 'desc',
+  ) {
+    await this.assertEventOwner(eventId, userId);
+    const skip = offset + (page - 1) * PAGE_SIZE;
+    const { photos, total } =
+      await this.photoRepository.findAllByEventPaginated(
+        eventId,
+        skip,
+        PAGE_SIZE,
+        order,
       );
 
-      if (similarity > THRESHOLD) {
-        currentGroup.push(photos[j]);
-        visited.add(photos[j].id);
-      }
-    }
-
-    groups[`구도 ${groupCount++}`] = currentGroup;
+    return { photos, pagination: { total, offset, page, pageSize: PAGE_SIZE } };
   }
 
-  return groups;
-}
+  async getTimeline(userId: string, eventId: string) {
+    await this.assertEventOwner(eventId, userId);
+    return this.photoRepository.findTimelineByEvent(eventId);
+  }
 
-// 유사도 계산 보조 함수
-private calculateCosineSimilarity(vecA: number[], vecB: number[]): number {
-  const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
-  const magA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
-  const magB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
-  return dotProduct / (magA * magB);
-}
+  async getGroupedByUploader(userId: string, eventId: string) {
+    await this.assertEventOwner(eventId, userId);
+    const photos = await this.photoRepository.findAllByEvent(eventId);
+    return this.groupByUploader(photos);
+  }
 
+  async getGroupedByComposition(userId: string, eventId: string) {
+    await this.assertEventOwner(eventId, userId);
+    const photos = await this.photoRepository.findEmbeddingsByEvent(eventId);
+    return this.groupByComposition(photos);
+  }
+
+  async getDetail(userId: string, photoId: string) {
+    const photo = await this.photoRepository.findPhotoDetailForOwner(
+      photoId,
+      userId,
+    );
+
+    if (!photo) {
+      throw new NotFoundException('Photo not found');
+    }
+
+    return {
+      ...photo,
+      originalPhotoUrl: await this.storageService.getReadUrl(
+        photo.originalObjectKey,
+      ),
+    };
+  }
+
+  async searchUploader(userId: string, eventId: string, name: string) {
+    await this.assertEventOwner(eventId, userId);
+    const photos = await this.photoRepository.searchUploaders(eventId, name);
+    return this.groupByUploader(photos);
+  }
+
+  async toggleFavorite(userId: string, photoId: string) {
+    const photo = await this.photoRepository.findPhotoForOwner(photoId, userId);
+
+    if (!photo) {
+      throw new NotFoundException('Photo not found');
+    }
+
+    return this.photoRepository.toggleFavorite(photoId, !photo.isFavorite);
+  }
+
+  private async assertEventOwner(eventId: string, userId: string) {
+    const event = await this.photoRepository.findEventOwnedByUser(
+      eventId,
+      userId,
+    );
+    if (!event) {
+      throw new ForbiddenException('Event access is denied');
+    }
+  }
+
+  private async getGuestOrThrow(guestId: string) {
+    const guest = await this.photoRepository.findGuestById(guestId);
+    if (!guest) {
+      throw new ForbiddenException('Guest event access is denied');
+    }
+
+    return guest;
+  }
+
+  private assertValidGuestFileKey(
+    fileKey: string,
+    eventId: string,
+    guestId: string,
+  ) {
+    const expectedPrefix = `events/${eventId}/${guestId}/`;
+    if (!fileKey.startsWith(expectedPrefix)) {
+      throw new UnprocessableEntityException('Invalid photo file key');
+    }
+  }
+
+  private assertSupportedMimeType(mimeType: string) {
+    if (!SUPPORTED_IMAGE_MIME_TYPES.has(mimeType)) {
+      throw new UnprocessableEntityException('Unsupported image MIME type');
+    }
+  }
+
+  private groupByUploader<
+    T extends {
+      uploadedByGuest: { name: string } | null;
+    },
+  >(photos: T[]) {
+    return photos.reduce<Record<string, T[]>>((groups, photo) => {
+      const uploaderName = photo.uploadedByGuest?.name ?? '익명';
+      groups[uploaderName] = [...(groups[uploaderName] ?? []), photo];
+      return groups;
+    }, {});
+  }
+
+  private groupByComposition(photos: CompositionPhoto[]) {
+    const groups: Record<string, CompositionPhoto[]> = {};
+    const visited = new Set<string>();
+    let groupCount = 1;
+
+    for (let i = 0; i < photos.length; i += 1) {
+      if (visited.has(photos[i].id)) {
+        continue;
+      }
+
+      const currentGroup = [photos[i]];
+      visited.add(photos[i].id);
+
+      for (let j = i + 1; j < photos.length; j += 1) {
+        if (visited.has(photos[j].id)) {
+          continue;
+        }
+
+        const similarity = this.calculateCosineSimilarity(
+          photos[i].embedding,
+          photos[j].embedding,
+        );
+
+        if (similarity > COMPOSITION_THRESHOLD) {
+          currentGroup.push(photos[j]);
+          visited.add(photos[j].id);
+        }
+      }
+
+      groups[`구도 ${groupCount}`] = currentGroup;
+      groupCount += 1;
+    }
+
+    return groups;
+  }
+
+  private calculateCosineSimilarity(vecA: number[], vecB: number[]) {
+    if (vecA.length === 0 || vecA.length !== vecB.length) {
+      return 0;
+    }
+
+    const dotProduct = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
+    const magA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
+    const magB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
+
+    if (magA === 0 || magB === 0) {
+      return 0;
+    }
+
+    return dotProduct / (magA * magB);
+  }
+
+  private isUniqueConstraintError(error: unknown) {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'P2002'
+    );
+  }
 }

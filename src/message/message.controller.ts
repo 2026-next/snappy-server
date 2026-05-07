@@ -32,7 +32,8 @@ export class MessageController {
 
   @ApiOperation({ summary: 'Write a new message' })
   @ApiConflictResponse({
-    description: 'You can only create one message. Please update your existing message instead.',
+    description:
+      'You can only create one message. Please update your existing message instead.',
   })
   @ApiCreatedResponse({
     description: 'Message created successfully',
@@ -93,7 +94,10 @@ export class MessageController {
   })
   @ApiNotFoundResponse({ description: 'Message not found' })
   @Patch('my')
-  update(@Body() updateMessageDto: UpdateMessageDto, @Req() req: AuthenticatedRequest) {
+  update(
+    @Body() updateMessageDto: UpdateMessageDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
     const guestId = req.user.sub;
     return this.messageService.updateMyMessage(updateMessageDto, guestId);
   }

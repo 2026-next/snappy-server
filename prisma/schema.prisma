@@ -61,59 +61,58 @@ model OAuthAccount {
 }
 
 model Event {
-  id        String    @id @default(cuid())
-  name      String
-  eventDate DateTime
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  ownerId   String
-  owner     User      @relation("EventOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  guests    Guest[]
-  photos    Photo[]
-  messages  Message[]
-  accessCode  String   @unique @default(nanoid())
+  id         String    @id @default(cuid())
+  name       String
+  eventDate  DateTime
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  ownerId    String
+  owner      User      @relation("EventOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  guests     Guest[]
+  photos     Photo[]
+  messages   Message[]
+  accessCode String    @unique @default(nanoid())
 
   @@index([ownerId, eventDate])
 }
 
 model Guest {
-  id            String        @id @default(cuid())
-  name          String
-  passwordHash  String
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  eventId       String
-  event         Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  relation      GuestRelation @default(OTHER)
-  uploadedPhotos Photo[]      @relation("GuestUploader")
-  messages      Message[]     @relation("GuestMessageAuthor")
-  sessions      AuthSession[] @relation("GuestSession")
+  id             String        @id @default(cuid())
+  name           String
+  passwordHash   String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  eventId        String
+  event          Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  relation       GuestRelation @default(OTHER)
+  uploadedPhotos Photo[]       @relation("GuestUploader")
+  messages       Message[]     @relation("GuestMessageAuthor")
+  sessions       AuthSession[] @relation("GuestSession")
 
   @@unique([eventId, name])
   @@index([eventId, name])
 }
 
 model Photo {
-  id                  String    @id @default(cuid())
-  originalObjectKey   String    @unique
-  uploadedByName      String?
-  mimeType            String?
-  fileSizeBytes       Int?
-  width               Int?
-  height              Int?
-  exifTakenAt         DateTime?
-  uploadedAt          DateTime  @default(now())
-  isDeleted           Boolean   @default(false)
-  deletedAt           DateTime?
-  isDownloadedByCouple Boolean  @default(false)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  eventId             String
-  event               Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  uploadedByGuestId   String?
-  uploadedByGuest     Guest?    @relation("GuestUploader", fields: [uploadedByGuestId], references: [id], onDelete: SetNull)
+  id                String    @id @default(cuid())
+  originalObjectKey String    @unique
+  mimeType          String?
+  fileSizeBytes     Int?
+  width             Int?
+  height            Int?
+  exifTakenAt       DateTime?
+  uploadedAt        DateTime  @default(now())
+  isDeleted         Boolean   @default(false)
+  deletedAt         DateTime?
+  isDownloaded      Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  eventId           String
+  event             Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  uploadedByGuestId String?
+  uploadedByGuest   Guest?    @relation("GuestUploader", fields: [uploadedByGuestId], references: [id], onDelete: SetNull)
   embedding         Float[]
-  isFavorite Boolean @default(false)
+  isFavorite        Boolean   @default(false)
 
   @@index([eventId, uploadedAt])
   @@index([eventId, isDeleted, uploadedAt])
@@ -121,14 +120,14 @@ model Photo {
 }
 
 model Message {
-  id            String    @id @default(cuid())
-  content       String    @db.Text
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id            String   @id @default(cuid())
+  content       String   @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
   eventId       String
-  event         Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
   authorGuestId String?
-  authorGuest   Guest?    @relation("GuestMessageAuthor", fields: [authorGuestId], references: [id], onDelete: SetNull)
+  authorGuest   Guest?   @relation("GuestMessageAuthor", fields: [authorGuestId], references: [id], onDelete: SetNull)
 
   @@index([eventId, createdAt])
   @@index([eventId, authorGuestId])
