@@ -24,15 +24,16 @@ import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request-types';
 
 @ApiTags('Message')
+@ApiBearerAuth('access-token')
+@UseGuards(AccessTokenGuard)
 @Controller('message')
 export class MessageController {
   constructor(private readonly messageService: MessageService) {}
 
   @ApiOperation({ summary: 'Write a new message' })
-  @ApiBearerAuth('access-token')
-  @UseGuards(AccessTokenGuard)
   @ApiConflictResponse({
-    description: 'You can only create one message. Please update your existing message instead.',
+    description:
+      'You can only create one message. Please update your existing message instead.',
   })
   @ApiCreatedResponse({
     description: 'Message created successfully',
@@ -57,8 +58,6 @@ export class MessageController {
   }
 
   @ApiOperation({ summary: 'Find my message' })
-  @ApiBearerAuth('access-token')
-  @UseGuards(AccessTokenGuard)
   @ApiNotFoundResponse({ description: 'Message not found' })
   @ApiOkResponse({
     description: 'Message retrieved successfully',
@@ -80,8 +79,6 @@ export class MessageController {
   }
 
   @ApiOperation({ summary: 'Update my message' })
-  @ApiBearerAuth('access-token')
-  @UseGuards(AccessTokenGuard)
   @ApiOkResponse({
     description: 'Message updated successfully',
     schema: {
@@ -97,7 +94,10 @@ export class MessageController {
   })
   @ApiNotFoundResponse({ description: 'Message not found' })
   @Patch('my')
-  update(@Body() updateMessageDto: UpdateMessageDto, @Req() req: AuthenticatedRequest) {
+  update(
+    @Body() updateMessageDto: UpdateMessageDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
     const guestId = req.user.sub;
     return this.messageService.updateMyMessage(updateMessageDto, guestId);
   }

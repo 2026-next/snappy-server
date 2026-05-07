@@ -1,26 +1,83 @@
-import { Injectable } from '@nestjs/common';
-import { CreateStorageDto } from './dto/create-storage.dto';
-import { UpdateStorageDto } from './dto/update-storage.dto';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Storage } from '@google-cloud/storage';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class StorageService {
-  create(createStorageDto: CreateStorageDto) {
-    return 'This action adds a new storage';
+  private readonly storage: Storage;
+  private readonly bucketName: string;
+
+  constructor() {
+    this.storage = new Storage();
+    this.bucketName = process.env.GCP_STORAGE_BUCKET || '';
   }
 
-  findAll() {
-    return `This action returns all storage`;
+  async createUploadSignedUrls(
+    eventId: string,
+    guestId: string,
+    mimeType: string,
+    fileCount: number,
+  ) {
+    if (!this.bucketName) {
+      throw new InternalServerErrorException('GCS bucket is not configured');
+    }
+
+    try {
+      const uploadUrls = await Promise.all(
+        Array.from({ length: fileCount }, async () => {
+          const fileKey = `events/${eventId}/${guestId}/${uuidv4()}`;
+          const [uploadUrl] = await this.storage
+            .bucket(this.bucketName)
+            .file(fileKey)
+            .getSignedUrl({
+              version: 'v4',
+              action: 'write',
+              expires: Date.now() + 5 * 60 * 1000,
+              contentType: mimeType,
+            });
+
+          return { uploadUrl, fileKey };
+        }),
+      );
+
+      return uploadUrls;
+    } catch {
+      throw new InternalServerErrorException('GCS signed URL creation failed');
+    }
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} storage`;
+  async getReadUrl(fileKey: string) {
+    if (!this.bucketName) {
+      return null;
+    }
+
+    try {
+      const [url] = await this.storage
+        .bucket(this.bucketName)
+        .file(fileKey)
+        .getSignedUrl({
+          version: 'v4',
+          action: 'read',
+          expires: Date.now() + 15 * 60 * 1000,
+        });
+
+      return url;
+    } catch {
+      throw new InternalServerErrorException('GCS read URL creation failed');
+    }
   }
 
-  update(id: number, updateStorageDto: UpdateStorageDto) {
-    return `This action updates a #${id} storage`;
-  }
+  async deleteObject(fileKey: string) {
+    if (!this.bucketName) {
+      return;
+    }
 
-  remove(id: number) {
-    return `This action removes a #${id} storage`;
+    try {
+      await this.storage.bucket(this.bucketName).file(fileKey).delete({
+        ignoreNotFound: true,
+      });
+    } catch {
+      throw new InternalServerErrorException('GCS object deletion failed');
+    }
   }
 }

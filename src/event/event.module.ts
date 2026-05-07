@@ -4,10 +4,10 @@ import { EventController } from './event.controller';
 import { EventRepository } from './repositories/event.repository';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
-import { JwtModule } from '@nestjs/jwt';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [PrismaModule, JwtModule.register({})],
+  imports: [PrismaModule, AuthModule],
   controllers: [EventController],
   providers: [EventService, EventRepository, AccessTokenGuard],
   exports: [EventRepository],

@@ -12,15 +12,15 @@ import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request-types';
 
 @ApiTags('User')
+@ApiBearerAuth('access-token')
+@UseGuards(AccessTokenGuard)
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @ApiOperation({ summary: 'Update my user profile' })
-  @ApiBearerAuth('access-token')
   @ApiBody({ type: UpdateUserDto })
   @ApiOkResponse({ description: 'Current user profile updated' })
-  @UseGuards(AccessTokenGuard)
   @Patch('me')
   updateMe(
     @Req() req: AuthenticatedRequest,
