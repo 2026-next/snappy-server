@@ -104,9 +104,8 @@ export class PhotoService {
       };
     }
 
+    await this.photoRepository.softDeletePhoto(photoId);
     await this.storageService.deleteObject(photo.originalObjectKey);
-
-    return this.photoRepository.deletePhoto(photoId);
   }
 
   async getFullAlbum(
