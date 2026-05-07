@@ -18,15 +18,17 @@ import {
   ApiUnauthorizedResponse,
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { GuestLoginDto } from './dto/guest-login.dto';
 import { GuestRegisterDto } from './dto/guest-register.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { AccessTokenGuard } from './guards/access-token.guard';
+import { GoogleOAuthGuard } from './guards/google-oauth.guard';
+import { KakaoOAuthGuard } from './guards/kakao-oauth.guard';
 import type { AuthenticatedRequest } from './types/authenticated-request-types';
 import { MeResponseDto, TokenPairResponseDto } from './dto/auth-response.dto';
+import { getOAuthRedirectOrigin } from './oauth-redirect-origin';
 
 type OAuthProviderCallback = 'google' | 'kakao';
 
@@ -68,36 +70,36 @@ export class AuthController {
 
   @ApiOperation({ summary: 'Google OAuth로 들어가는 endpoint' })
   @Get('oauth/google')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleOAuthGuard)
   googleAuthStart() {
     // Guard will redirect to Google OAuth consent screen
   }
 
   @ApiOperation({ summary: 'Google OAuth callback(나오는 endpoint)' })
   @Get('oauth/google/callback')
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleOAuthGuard)
   googleAuthPassportCallback(
     @Req() req: OAuthCallbackRequest,
     @Res() res: Response,
   ): void {
-    this.redirectOAuthCallback('google', req.user, res);
+    this.redirectOAuthCallback('google', req.user, req, res);
   }
 
   @ApiOperation({ summary: 'Kakao OAuth로 들어가는 endpoint' })
   @Get('oauth/kakao')
-  @UseGuards(AuthGuard('kakao'))
+  @UseGuards(KakaoOAuthGuard)
   kakaoAuthStart() {
     // Guard will redirect to Kakao OAuth consent screen
   }
 
   @ApiOperation({ summary: 'Kakao OAuth callback(나오는 endpoint)' })
   @Get('oauth/kakao/callback')
-  @UseGuards(AuthGuard('kakao'))
+  @UseGuards(KakaoOAuthGuard)
   kakaoAuthPassportCallback(
     @Req() req: OAuthCallbackRequest,
     @Res() res: Response,
   ): void {
-    this.redirectOAuthCallback('kakao', req.user, res);
+    this.redirectOAuthCallback('kakao', req.user, req, res);
   }
 
   @ApiOperation({ summary: 'Refresh token' })
@@ -133,10 +135,10 @@ export class AuthController {
   private redirectOAuthCallback(
     provider: OAuthProviderCallback,
     tokens: TokenPairResponseDto,
+    req: Request,
     res: Response,
   ): void {
-    const frontendOrigin =
-      process.env.FRONTEND_ORIGIN ?? 'http://localhost:5174';
+    const frontendOrigin = getOAuthRedirectOrigin(req);
     const redirectUrl = new URL(
       `/auth/oauth/${provider}/callback`,
       frontendOrigin,

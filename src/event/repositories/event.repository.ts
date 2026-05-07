@@ -19,21 +19,19 @@ export class EventRepository {
   async findAllEventsByOwnerId(ownerId: string) {
     return this.prisma.event.findMany({
       where: { ownerId },
-      select: {
-        name: true,
-        eventDate: true,
-        owner: {
-          select: {
-            name: true,
-          },
-        },
-      },
     });
   }
 
   async findEventByAccessCode(accessCode: string) {
     return this.prisma.event.findUnique({
       where: { accessCode },
+    });
+  }
+
+  async updateThumbnailObjectKey(eventId: string, thumbnailObjectKey: string) {
+    return this.prisma.event.update({
+      where: { id: eventId },
+      data: { thumbnailObjectKey },
     });
   }
 }

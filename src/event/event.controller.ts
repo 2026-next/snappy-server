@@ -39,6 +39,11 @@ export class EventController {
         updatedAt: '2024-06-01T12:00:00.000Z',
         ownerId: 'user-uuid',
         accessCode: 'access_event-uuid',
+        thumbnailObjectKey: 'events/event-uuid/thumbnail/photo-uuid',
+        thumbnailUpload: {
+          uploadUrl: 'https://storage.googleapis.com/signed-upload-url',
+          fileKey: 'events/event-uuid/thumbnail/photo-uuid',
+        },
         qrLink: 'http://localhost:3000/guest/access_event-uuid/onboarding',
       },
     },
@@ -61,11 +66,15 @@ export class EventController {
     schema: {
       example: [
         {
+          id: 'event-uuid',
           name: 'event name',
           eventDate: '2026-05-20T10:00:00.000Z',
-          owner: {
-            name: 'owner name',
-          },
+          createdAt: '2024-06-01T12:00:00.000Z',
+          updatedAt: '2024-06-01T12:00:00.000Z',
+          ownerId: 'user-uuid',
+          accessCode: 'access_event-uuid',
+          thumbnailObjectKey: 'events/event-uuid/thumbnail/photo-uuid',
+          thumbnailUrl: 'https://storage.googleapis.com/signed-read-url',
         },
       ],
     },

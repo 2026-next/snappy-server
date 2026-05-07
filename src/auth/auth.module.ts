@@ -8,6 +8,8 @@ import { AuthRepository } from './repositories/auth.repository';
 import { PrismaModule } from '../prisma/prisma.module';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { KakaoStrategy } from './strategies/kakao.strategy';
+import { GoogleOAuthGuard } from './guards/google-oauth.guard';
+import { KakaoOAuthGuard } from './guards/kakao-oauth.guard';
 
 @Module({
   imports: [PassportModule.register({}), JwtModule.register({}), PrismaModule],
@@ -16,6 +18,8 @@ import { KakaoStrategy } from './strategies/kakao.strategy';
     AuthService,
     AccessTokenGuard,
     AuthRepository,
+    GoogleOAuthGuard,
+    KakaoOAuthGuard,
     GoogleStrategy,
     KakaoStrategy,
   ],

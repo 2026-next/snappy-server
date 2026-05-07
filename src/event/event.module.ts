@@ -5,9 +5,10 @@ import { EventRepository } from './repositories/event.repository';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import { AuthModule } from '../auth/auth.module';
+import { StorageModule } from '../storage/storage.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, StorageModule],
   controllers: [EventController],
   providers: [EventService, EventRepository, AccessTokenGuard],
   exports: [EventRepository],

@@ -46,6 +46,29 @@ export class StorageService {
     }
   }
 
+  async createEventThumbnailUploadSignedUrl(eventId: string, mimeType: string) {
+    if (!this.bucketName) {
+      throw new InternalServerErrorException('GCS bucket is not configured');
+    }
+
+    try {
+      const fileKey = `events/${eventId}/thumbnail/${uuidv4()}`;
+      const [uploadUrl] = await this.storage
+        .bucket(this.bucketName)
+        .file(fileKey)
+        .getSignedUrl({
+          version: 'v4',
+          action: 'write',
+          expires: Date.now() + 5 * 60 * 1000,
+          contentType: mimeType,
+        });
+
+      return { uploadUrl, fileKey };
+    } catch {
+      throw new InternalServerErrorException('GCS signed URL creation failed');
+    }
+  }
+
   async getReadUrl(fileKey: string) {
     if (!this.bucketName) {
       return null;

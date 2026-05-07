@@ -61,17 +61,18 @@ model OAuthAccount {
 }
 
 model Event {
-  id         String    @id @default(cuid())
-  name       String
-  eventDate  DateTime
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  ownerId    String
-  owner      User      @relation("EventOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  guests     Guest[]
-  photos     Photo[]
-  messages   Message[]
-  accessCode String    @unique @default(nanoid())
+  id                 String    @id @default(cuid())
+  name               String
+  eventDate          DateTime
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  ownerId            String
+  owner              User      @relation("EventOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  guests             Guest[]
+  photos             Photo[]
+  messages           Message[]
+  accessCode         String    @unique @default(nanoid())
+  thumbnailObjectKey String?
 
   @@index([ownerId, eventDate])
 }
