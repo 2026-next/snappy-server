@@ -12,10 +12,8 @@ import {
 } from '@nestjs/common';
 import { PhotoService } from './photo.service';
 import { CreatePhotoDto } from './dto/create-photo.dto';
-import { UpdatePhotoDto } from './dto/update-photo.dto';
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request-types';
-
 
 
 @Controller('photo')
