@@ -102,12 +102,6 @@ export class PhotoRepository {
     });
   }
 
-  async deletePhoto(id: string) {
-    return this.prisma.photo.delete({
-      where: { id },
-    });
-  }
-
   async findGuestPhoto(photoId: string, guestId: string, eventId: string) {
     return this.prisma.photo.findFirst({
       where: {

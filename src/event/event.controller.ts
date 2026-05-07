@@ -39,7 +39,7 @@ export class EventController {
         updatedAt: '2024-06-01T12:00:00.000Z',
         ownerId: 'user-uuid',
         accessCode: 'access_event-uuid',
-        qrLink: 'http://localhost:3000/guest/join/access_event-uuid',
+        qrLink: 'http://localhost:3000/guest/access_event-uuid/onboarding',
       },
     },
   })

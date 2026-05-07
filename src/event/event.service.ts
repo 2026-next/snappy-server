@@ -16,7 +16,7 @@ export class EventService {
 
     return {
       ...event,
-      qrLink: `${baseUrl}/guest/join/${event.accessCode}`,
+      qrLink: `${baseUrl}/guest/${event.accessCode}/onboarding`,
     };
   }
 
