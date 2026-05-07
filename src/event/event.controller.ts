@@ -21,12 +21,13 @@ import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request-types';
 
 @ApiTags('Event')
+@ApiBearerAuth('access-token')
+@UseGuards(AccessTokenGuard)
 @Controller('event')
 export class EventController {
   constructor(private readonly eventService: EventService) {}
 
   @ApiOperation({ summary: 'Create an event' })
-  @ApiBearerAuth('access-token')
   @ApiCreatedResponse({
     description: 'The event has been successfully created.',
     schema: {
@@ -42,7 +43,6 @@ export class EventController {
       },
     },
   })
-  @UseGuards(AccessTokenGuard)
   @Post('create')
   create(
     @Req() req: AuthenticatedRequest,
@@ -56,7 +56,6 @@ export class EventController {
   }
 
   @ApiOperation({ summary: 'Get all of my events' })
-  @ApiBearerAuth('access-token')
   @ApiOkResponse({
     description: 'A list of events created by the authenticated user.',
     schema: {
@@ -71,7 +70,6 @@ export class EventController {
       ],
     },
   })
-  @UseGuards(AccessTokenGuard)
   @Get('my-events')
   findMyEvents(@Req() req: AuthenticatedRequest) {
     if (req.user.sessionType !== SessionType.USER) {

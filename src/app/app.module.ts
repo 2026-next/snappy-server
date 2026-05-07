@@ -7,6 +7,7 @@ import { MessageModule } from '../message/message.module';
 import { UserModule } from '../user/user.module';
 import { GuestModule } from '../guest/guest.module';
 import { EventModule } from '../event/event.module';
+import { PhotoModule } from '../photo/photo.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { EventModule } from '../event/event.module';
     MessageModule,
     UserModule,
     GuestModule,
+    PhotoModule,
   ],
   controllers: [AppController],
   providers: [AppService],
