@@ -25,6 +25,14 @@ export class EventRepository {
   async findEventByAccessCode(accessCode: string) {
     return this.prisma.event.findUnique({
       where: { accessCode },
+
+      select: {
+        id: true,
+        name: true,
+        eventDate: true,
+        accessCode: true,
+        thumbnailObjectKey: true, 
+      }
     });
   }
 

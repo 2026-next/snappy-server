@@ -2,12 +2,14 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { CheckGuestNameDto } from './dto/check-name.dto';
 import { GuestRepository } from './repositories/guest.repository';
 import { EventRepository } from '../event/repositories/event.repository';
+import { StorageService } from '../storage/storage.service';
 
 @Injectable()
 export class GuestService {
   constructor(
     private readonly guestRepository: GuestRepository,
     private readonly eventRepository: EventRepository,
+    private readonly storageService: StorageService,
   ) {}
 
   async checkNameExists(dto: CheckGuestNameDto) {
@@ -23,6 +25,11 @@ export class GuestService {
     if (!event) {
       throw new NotFoundException('Event not found');
     }
-    return event;
+
+    const coverImageUrl = event.thumbnailObjectKey
+      ? await this.storageService.getReadUrl(event.thumbnailObjectKey)
+      : null;
+
+    return {...event, coverImageUrl};
   }
 }
