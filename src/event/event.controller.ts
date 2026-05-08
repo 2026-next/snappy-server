@@ -40,11 +40,11 @@ export class EventController {
         ownerId: 'user-uuid',
         accessCode: 'access_event-uuid',
         thumbnailObjectKey: 'events/event-uuid/thumbnail/photo-uuid',
+        qrLink: 'https://snappyku.site/guest/access_event-uuid/onboarding',
         thumbnailUpload: {
           uploadUrl: 'https://storage.googleapis.com/signed-upload-url',
           fileKey: 'events/event-uuid/thumbnail/photo-uuid',
         },
-        qrLink: 'http://localhost:3000/guest/access_event-uuid/onboarding',
       },
     },
   })
@@ -74,6 +74,7 @@ export class EventController {
           ownerId: 'user-uuid',
           accessCode: 'access_event-uuid',
           thumbnailObjectKey: 'events/event-uuid/thumbnail/photo-uuid',
+          qrLink: 'https://snappyku.site/guest/access_event-uuid/onboarding',
           thumbnailUrl: 'https://storage.googleapis.com/signed-read-url',
         },
       ],
