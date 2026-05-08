@@ -6,6 +6,8 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { CreatePhotoDto } from './dto/create-photo.dto';
+import { CreatePhotoGroupDto } from './dto/create-photo-group.dto';
+import { PhotoGroupPhotosDto } from './dto/photo-group-photos.dto';
 import { PhotoRepository } from './repositories/photo.repository';
 import { StorageService } from '../storage/storage.service';
 
@@ -133,6 +135,11 @@ export class PhotoService {
     return this.photoRepository.findTimelineByEvent(eventId);
   }
 
+  async getFavoritePhotos(userId: string, eventId: string) {
+    await this.assertEventOwner(eventId, userId);
+    return this.photoRepository.findAllByEvent(eventId, true);
+  }
+
   async getGroupedByUploader(userId: string, eventId: string) {
     await this.assertEventOwner(eventId, userId);
     const photos = await this.photoRepository.findAllByEvent(eventId);
@@ -179,6 +186,88 @@ export class PhotoService {
     return this.photoRepository.toggleFavorite(photoId, !photo.isFavorite);
   }
 
+  async createPhotoGroup(userId: string, dto: CreatePhotoGroupDto) {
+    await this.assertEventOwner(dto.eventId, userId);
+    const photoIds = this.getUniquePhotoIds(dto.photoIds ?? []);
+    await this.assertPhotosBelongToEvent(dto.eventId, photoIds);
+
+    try {
+      return await this.photoRepository.createPhotoGroup({
+        eventId: dto.eventId,
+        userId,
+        name: dto.name,
+        photoIds,
+      });
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictException('Photo group name already exists');
+      }
+
+      throw error;
+    }
+  }
+
+  async getPhotoGroups(userId: string, eventId: string) {
+    await this.assertEventOwner(eventId, userId);
+    return this.photoRepository.findPhotoGroupsByEvent(eventId);
+  }
+
+  async getPhotoGroupPhotos(
+    userId: string,
+    groupId: string,
+    offset: number,
+    page: number,
+    order: 'asc' | 'desc',
+  ) {
+    await this.getPhotoGroupForOwnerOrThrow(groupId, userId);
+    const skip = offset + (page - 1) * PAGE_SIZE;
+    const { photos, total } =
+      await this.photoRepository.findPhotoGroupPhotosPaginated(
+        groupId,
+        skip,
+        PAGE_SIZE,
+        order,
+      );
+
+    return { photos, pagination: { total, offset, page, pageSize: PAGE_SIZE } };
+  }
+
+  async addPhotosToGroup(
+    userId: string,
+    groupId: string,
+    dto: PhotoGroupPhotosDto,
+  ) {
+    const group = await this.getPhotoGroupForOwnerOrThrow(groupId, userId);
+    const photoIds = this.getUniquePhotoIds(dto.photoIds);
+    await this.assertPhotosBelongToEvent(group.eventId, photoIds);
+    return this.photoRepository.addPhotosToGroup(groupId, photoIds);
+  }
+
+  async replaceGroupPhotos(
+    userId: string,
+    groupId: string,
+    dto: PhotoGroupPhotosDto,
+  ) {
+    const group = await this.getPhotoGroupForOwnerOrThrow(groupId, userId);
+    const photoIds = this.getUniquePhotoIds(dto.photoIds);
+    await this.assertPhotosBelongToEvent(group.eventId, photoIds);
+    return this.photoRepository.replaceGroupPhotos(groupId, photoIds);
+  }
+
+  async removePhotoFromGroup(userId: string, groupId: string, photoId: string) {
+    await this.getPhotoGroupForOwnerOrThrow(groupId, userId);
+    const result = await this.photoRepository.removePhotoFromGroup(
+      groupId,
+      photoId,
+    );
+
+    if (result.count === 0) {
+      throw new NotFoundException('Photo group membership not found');
+    }
+
+    return { removed: true };
+  }
+
   private async assertEventOwner(eventId: string, userId: string) {
     const event = await this.photoRepository.findEventOwnedByUser(
       eventId,
@@ -196,6 +285,40 @@ export class PhotoService {
     }
 
     return guest;
+  }
+
+  private async getPhotoGroupForOwnerOrThrow(groupId: string, userId: string) {
+    const group = await this.photoRepository.findPhotoGroupForOwner(
+      groupId,
+      userId,
+    );
+
+    if (!group) {
+      throw new NotFoundException('Photo group not found');
+    }
+
+    return group;
+  }
+
+  private async assertPhotosBelongToEvent(eventId: string, photoIds: string[]) {
+    if (photoIds.length === 0) {
+      return;
+    }
+
+    const photos = await this.photoRepository.findPhotosByIdsForEvent(
+      eventId,
+      photoIds,
+    );
+
+    if (photos.length !== photoIds.length) {
+      throw new UnprocessableEntityException(
+        'One or more photos do not belong to the event',
+      );
+    }
+  }
+
+  private getUniquePhotoIds(photoIds: string[]) {
+    return [...new Set(photoIds)];
   }
 
   private assertValidGuestFileKey(

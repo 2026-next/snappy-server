@@ -1,5 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, IsDateString } from 'class-validator';
+import {
+  IsDateString,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class CreateEventDto {
   @ApiProperty({
@@ -18,5 +24,13 @@ export class CreateEventDto {
   @IsNotEmpty()
   eventDate!: string;
 
-  // ownerId는 이벤트 생성 시 서버에서 자동으로 할당됨.
+  @ApiProperty({
+    description: '대표 사진 MIME 타입',
+    required: false,
+    example: 'image/jpeg',
+  })
+  @IsString()
+  @IsOptional()
+  @IsIn(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'])
+  thumbnailMimeType?: string;
 }
