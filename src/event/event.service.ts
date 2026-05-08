@@ -16,8 +16,6 @@ export class EventService {
       createEventDto,
     );
 
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-
     const thumbnailUpload = createEventDto.thumbnailMimeType
       ? await this.storageService.createEventThumbnailUploadSignedUrl(
           event.id,
@@ -33,7 +31,7 @@ export class EventService {
 
     return {
       ...eventWithThumbnail,
-      qrLink: `${baseUrl}/guest/${event.accessCode}/onboarding`,
+      qrLink: this.buildGuestOnboardingLink(event.accessCode),
       ...(thumbnailUpload && { thumbnailUpload }),
     };
   }
@@ -43,10 +41,24 @@ export class EventService {
     return Promise.all(
       events.map(async (event) => ({
         ...event,
+        qrLink: this.buildGuestOnboardingLink(event.accessCode),
         thumbnailUrl: event.thumbnailObjectKey
           ? await this.storageService.getReadUrl(event.thumbnailObjectKey)
           : null,
       })),
     );
+  }
+
+  private buildGuestOnboardingLink(accessCode: string) {
+    const frontendOrigin = this.getFrontendOrigin();
+    return `${frontendOrigin}/guest/${accessCode}/onboarding`;
+  }
+
+  private getFrontendOrigin() {
+    const origin =
+      process.env.FRONTEND_ORIGIN ??
+      process.env.LOCALHOST_ORIGIN;
+
+    return origin!.replace(/\/$/, '');
   }
 }
