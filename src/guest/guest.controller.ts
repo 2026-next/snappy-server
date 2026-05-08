@@ -39,7 +39,7 @@ export class GuestController {
     },
   })
   @ApiNotFoundResponse({ description: 'Event not found' })
-  @Get('join/:accessCode')
+  @Get(':accessCode/join')
   async joinByAccessCode(@Param('accessCode') accessCode: string) {
     return this.guestService.getEventByAccessCode(accessCode);
   }
