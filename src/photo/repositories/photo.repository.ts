@@ -14,6 +14,13 @@ export type CreatePhotoData = {
   embedding: number[];
 };
 
+export type CreatePhotoGroupData = {
+  eventId: string;
+  userId: string;
+  name: string;
+  photoIds?: string[];
+};
+
 @Injectable()
 export class PhotoRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -167,6 +174,104 @@ export class PhotoRepository {
     return this.prisma.photo.findFirst({
       where: { id: photoId, isDeleted: false, event: { ownerId: userId } },
     });
+  }
+
+  async createPhotoGroup(data: CreatePhotoGroupData) {
+    return this.prisma.photoGroup.create({
+      data: {
+        eventId: data.eventId,
+        createdByUserId: data.userId,
+        name: data.name,
+        photos: data.photoIds?.length
+          ? {
+              createMany: {
+                data: data.photoIds.map((photoId) => ({ photoId })),
+                skipDuplicates: true,
+              },
+            }
+          : undefined,
+      },
+      include: { _count: { select: { photos: true } } },
+    });
+  }
+
+  async findPhotoGroupsByEvent(eventId: string) {
+    return this.prisma.photoGroup.findMany({
+      where: { eventId },
+      include: {
+        _count: { select: { photos: true } },
+        photos: {
+          take: 1,
+          orderBy: { createdAt: 'asc' },
+          include: { photo: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async findPhotoGroupForOwner(groupId: string, userId: string) {
+    return this.prisma.photoGroup.findFirst({
+      where: { id: groupId, event: { ownerId: userId } },
+      include: { event: { select: { id: true } } },
+    });
+  }
+
+  async findPhotosByIdsForEvent(eventId: string, photoIds: string[]) {
+    return this.prisma.photo.findMany({
+      where: { id: { in: photoIds }, eventId, isDeleted: false },
+      select: { id: true },
+    });
+  }
+
+  async addPhotosToGroup(groupId: string, photoIds: string[]) {
+    return this.prisma.photoGroupPhoto.createMany({
+      data: photoIds.map((photoId) => ({ groupId, photoId })),
+      skipDuplicates: true,
+    });
+  }
+
+  async replaceGroupPhotos(groupId: string, photoIds: string[]) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.photoGroupPhoto.deleteMany({ where: { groupId } });
+      if (photoIds.length === 0) {
+        return { count: 0 };
+      }
+
+      return tx.photoGroupPhoto.createMany({
+        data: photoIds.map((photoId) => ({ groupId, photoId })),
+        skipDuplicates: true,
+      });
+    });
+  }
+
+  async removePhotoFromGroup(groupId: string, photoId: string) {
+    return this.prisma.photoGroupPhoto.deleteMany({
+      where: { groupId, photoId },
+    });
+  }
+
+  async findPhotoGroupPhotosPaginated(
+    groupId: string,
+    skip: number,
+    take: number,
+    order: Prisma.SortOrder,
+  ) {
+    const where = { groupId, photo: { isDeleted: false } };
+    const [links, total] = await this.prisma.$transaction([
+      this.prisma.photoGroupPhoto.findMany({
+        where,
+        include: {
+          photo: { include: { uploadedByGuest: { select: { name: true } } } },
+        },
+        orderBy: { photo: { uploadedAt: order } },
+        skip,
+        take,
+      }),
+      this.prisma.photoGroupPhoto.count({ where }),
+    ]);
+
+    return { photos: links.map((link) => link.photo), total };
   }
 
   async toggleFavorite(photoId: string, isFavorite: boolean) {

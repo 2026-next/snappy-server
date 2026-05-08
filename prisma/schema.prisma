@@ -39,6 +39,7 @@ model User {
   updatedAt     DateTime       @updatedAt
   oauthAccounts OAuthAccount[]
   ownedEvents   Event[]        @relation("EventOwner")
+  photoGroups   PhotoGroup[]   @relation("PhotoGroupCreator")
   sessions      AuthSession[]  @relation("UserSession")
 }
 
@@ -70,6 +71,7 @@ model Event {
   owner              User      @relation("EventOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   guests             Guest[]
   photos             Photo[]
+  photoGroups        PhotoGroup[]
   messages           Message[]
   accessCode         String    @unique @default(nanoid())
   thumbnailObjectKey String?
@@ -114,10 +116,40 @@ model Photo {
   uploadedByGuest   Guest?    @relation("GuestUploader", fields: [uploadedByGuestId], references: [id], onDelete: SetNull)
   embedding         Float[]
   isFavorite        Boolean   @default(false)
+  groupLinks        PhotoGroupPhoto[]
 
   @@index([eventId, uploadedAt])
   @@index([eventId, isDeleted, uploadedAt])
   @@index([eventId, uploadedByGuestId, uploadedAt])
+}
+
+model PhotoGroup {
+  id              String            @id @default(cuid())
+  name            String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  eventId         String
+  event           Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdByUserId String
+  createdByUser   User              @relation("PhotoGroupCreator", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  photos          PhotoGroupPhoto[]
+
+  @@unique([eventId, name])
+  @@index([eventId, createdAt])
+  @@index([createdByUserId, createdAt])
+}
+
+model PhotoGroupPhoto {
+  id        String     @id @default(cuid())
+  createdAt DateTime   @default(now())
+  groupId   String
+  group     PhotoGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  photoId   String
+  photo     Photo      @relation(fields: [photoId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, photoId])
+  @@index([photoId])
+  @@index([groupId, createdAt])
 }
 
 model Message {
