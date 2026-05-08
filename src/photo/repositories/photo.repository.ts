@@ -33,22 +33,8 @@ export class PhotoRepository {
       },
     });
   }
-
-  async findEventOwnedByUser(eventId: string, userId: string) {
-    return this.prisma.event.findFirst({
-      where: { id: eventId, ownerId: userId },
-      select: { id: true },
-    });
-  }
-
-  async findGuestById(guestId: string) {
-    return this.prisma.guest.findUnique({
-      where: { id: guestId },
-      select: { id: true, name: true, eventId: true },
-    });
-  }
-
-  async findAllByEvent(eventId: string, onlyFavorites = false) {
+// [기능] 특정 이벤트의 모든 사진 가져오기 (타임라인/즐겨찾기 필터 포함)
+  async findAllByEvent(eventId: string, onlyFavorites: boolean = false) {
     return this.prisma.photo.findMany({
       where: {
         eventId,
@@ -176,3 +162,5 @@ export class PhotoRepository {
     });
   }
 }
+
+
