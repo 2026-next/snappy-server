@@ -35,6 +35,8 @@ export class GuestController {
         updatedAt: '2024-06-01T12:00:00.000Z',
         ownerId: 'user-uuid',
         accessCode: 'unique-access-code',
+        thumbnailObjectKey: 'events/event-uuid/thumbnail/photo-uuid',
+        qrLink: 'https://snappyku.site/guest/access_event-uuid/onboarding',
       },
     },
   })

@@ -11,7 +11,15 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { SessionType } from '@prisma/client';
-import { ApiBearerAuth, ApiConflictResponse, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiConflictResponse,
+  ApiCreatedResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { PhotoService } from './photo.service';
 import { CreatePhotoDto } from './dto/create-photo.dto';
 import { CreateUploadUrlsDto } from './dto/create-upload-urls.dto';
@@ -26,7 +34,7 @@ export class PhotoController {
   constructor(private readonly photoService: PhotoService) {}
 
   @ApiOperation({ summary: 'Create guest photo upload signed URLs' })
-  @ApiCreatedResponse({ description: 'Signed URLs created successfully'})
+  @ApiCreatedResponse({ description: 'Signed URLs created successfully' })
   @Post('upload-url')
   createUploadUrls(
     @Req() req: AuthenticatedRequest,
@@ -42,7 +50,9 @@ export class PhotoController {
 
   @ApiOperation({ summary: 'Save guest uploaded photo metadata' })
   @ApiCreatedResponse({ description: 'Photo metadata saved successfully' })
-  @ApiConflictResponse({ description: 'Photo with the same file key already exists' })
+  @ApiConflictResponse({
+    description: 'Photo with the same file key already exists',
+  })
   @Post()
   create(
     @Req() req: AuthenticatedRequest,
@@ -91,7 +101,6 @@ export class PhotoController {
     this.assertUser(req);
     return this.photoService.toggleFavorite(req.user.sub, photoId);
   }
-
 
   // Helper methods to assert session type
   private assertGuest(req: AuthenticatedRequest) {

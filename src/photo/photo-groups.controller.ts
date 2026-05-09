@@ -42,7 +42,10 @@ export class PhotoGroupsController {
     @Body() createPhotoGroupDto: CreatePhotoGroupDto,
   ) {
     this.assertUser(req);
-    return this.photoService.createPhotoGroup(req.user.sub, createPhotoGroupDto);
+    return this.photoService.createPhotoGroup(
+      req.user.sub,
+      createPhotoGroupDto,
+    );
   }
 
   @ApiOperation({ summary: 'Get custom photo groups for an event' })

@@ -55,9 +55,7 @@ export class EventService {
   }
 
   private getFrontendOrigin() {
-    const origin =
-      process.env.FRONTEND_ORIGIN ??
-      process.env.LOCALHOST_ORIGIN;
+    const origin = process.env.FRONTEND_ORIGIN ?? process.env.LOCALHOST_ORIGIN;
 
     return origin!.replace(/\/$/, '');
   }

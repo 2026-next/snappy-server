@@ -26,7 +26,10 @@ export function getOAuthRedirectOrigin(request: Request) {
     const parsed = JSON.parse(
       Buffer.from(state, 'base64url').toString('utf8'),
     ) as Partial<OAuthState>;
-    if (parsed.redirectOrigin && isAllowedRedirectOrigin(parsed.redirectOrigin)) {
+    if (
+      parsed.redirectOrigin &&
+      isAllowedRedirectOrigin(parsed.redirectOrigin)
+    ) {
       return parsed.redirectOrigin;
     }
   } catch {
@@ -97,7 +100,8 @@ function getLocalhostFrontendOrigin() {
 }
 
 function isLocalhostRequest(request: Request) {
-  const hostname = request.hostname ?? getHostHeaderHostname(request.headers.host);
+  const hostname =
+    request.hostname ?? getHostHeaderHostname(request.headers.host);
   return Boolean(hostname && LOCALHOST_HOSTNAMES.has(hostname));
 }
 

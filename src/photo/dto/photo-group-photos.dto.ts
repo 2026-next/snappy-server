@@ -1,9 +1,4 @@
-import {
-  ArrayMaxSize,
-  ArrayUnique,
-  IsArray,
-  IsString,
-} from 'class-validator';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsString } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class PhotoGroupPhotosDto {
