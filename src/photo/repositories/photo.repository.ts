@@ -55,7 +55,7 @@ export class PhotoRepository {
     });
   }
 
-  async findAllByEvent(eventId: string, onlyFavorites = false) {
+  async findAllByEvent(eventId: string, onlyFavorites: boolean = false) {
     return this.prisma.photo.findMany({
       where: {
         eventId,

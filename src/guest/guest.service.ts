@@ -25,11 +25,13 @@ export class GuestService {
     if (!event) {
       throw new NotFoundException('Event not found');
     }
+
+    const thumbnailUrl = event.thumbnailObjectKey
+      ? await this.storageService.getReadUrl(event.thumbnailObjectKey)
+      : null;
     return {
-      event,
-      thumbnailUrl: event.thumbnailObjectKey
-        ? await this.storageService.getReadUrl(event.thumbnailObjectKey)
-        : null,
+      ...event,
+      thumbnailUrl
     };
   }
 }
