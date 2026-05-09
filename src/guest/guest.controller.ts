@@ -36,7 +36,7 @@ export class GuestController {
         ownerId: 'user-uuid',
         accessCode: 'unique-access-code',
         thumbnailObjectKey: 'events/event-uuid/thumbnail/photo-uuid',
-        qrLink: 'https://snappyku.site/guest/access_event-uuid/onboarding',
+        thumbnailUrl: 'https://storage-service.com/events/event-uuid/thumbnail/photo-uuid',
       },
     },
   })
