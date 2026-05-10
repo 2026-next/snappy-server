@@ -83,7 +83,19 @@ export class PhotoService {
 
   async findAllByGuest(guestId: string) {
     const guest = await this.getGuestOrThrow(guestId);
-    return this.photoRepository.findPhotosByGuest(guestId, guest.eventId);
+    const photos = await this.photoRepository.findPhotosByGuest(
+      guestId,
+      guest.eventId,
+    );
+
+    return Promise.all(
+      photos.map(async (photo) => ({
+        ...photo,
+        originalPhotoUrl: await this.storageService.getReadUrl(
+          photo.originalObjectKey,
+        ),
+      })),
+    );
   }
 
   async remove(photoId: string, guestId: string) {
