@@ -64,7 +64,7 @@ export class PhotoRepository {
       },
       include: {
         uploadedByGuest: {
-          select: { name: true },
+          select: { id: true, name: true, relation: true },
         },
       },
       orderBy: { uploadedAt: 'desc' },
@@ -81,7 +81,11 @@ export class PhotoRepository {
     const [photos, total] = await this.prisma.$transaction([
       this.prisma.photo.findMany({
         where,
-        include: { uploadedByGuest: { select: { name: true } } },
+        include: {
+          uploadedByGuest: {
+            select: { id: true, name: true, relation: true },
+          },
+        },
         orderBy: { uploadedAt: order },
         skip,
         take,
@@ -130,7 +134,11 @@ export class PhotoRepository {
   async findTimelineByEvent(eventId: string) {
     return this.prisma.photo.findMany({
       where: { eventId, isDeleted: false },
-      include: { uploadedByGuest: { select: { name: true } } },
+      include: {
+        uploadedByGuest: {
+          select: { id: true, name: true, relation: true },
+        },
+      },
       orderBy: [{ exifTakenAt: 'asc' }, { uploadedAt: 'asc' }],
     });
   }
@@ -142,7 +150,11 @@ export class PhotoRepository {
         id: true,
         originalObjectKey: true,
         uploadedAt: true,
-        uploadedByGuest: { select: { name: true } },
+        exifTakenAt: true,
+        uploadedByGuestId: true,
+        uploadedByGuest: {
+          select: { id: true, name: true, relation: true },
+        },
         embedding: true,
       },
     });
@@ -152,7 +164,7 @@ export class PhotoRepository {
     return this.prisma.photo.findFirst({
       where: { id: photoId, isDeleted: false, event: { ownerId: userId } },
       include: {
-        uploadedByGuest: { select: { id: true, name: true } },
+        uploadedByGuest: { select: { id: true, name: true, relation: true } },
         event: { select: { id: true, name: true } },
       },
     });
@@ -165,7 +177,11 @@ export class PhotoRepository {
         isDeleted: false,
         uploadedByGuest: { name: { contains: name, mode: 'insensitive' } },
       },
-      include: { uploadedByGuest: { select: { id: true, name: true } } },
+      include: {
+        uploadedByGuest: {
+          select: { id: true, name: true, relation: true },
+        },
+      },
       orderBy: { uploadedAt: 'desc' },
     });
   }
@@ -262,7 +278,13 @@ export class PhotoRepository {
       this.prisma.photoGroupPhoto.findMany({
         where,
         include: {
-          photo: { include: { uploadedByGuest: { select: { name: true } } } },
+          photo: {
+            include: {
+              uploadedByGuest: {
+                select: { id: true, name: true, relation: true },
+              },
+            },
+          },
         },
         orderBy: { photo: { uploadedAt: order } },
         skip,

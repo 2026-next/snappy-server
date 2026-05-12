@@ -25,6 +25,43 @@ type CompositionPhoto = Awaited<
   ReturnType<PhotoRepository['findEmbeddingsByEvent']>
 >[number];
 
+type PhotoWithObjectKey = {
+  originalObjectKey: string;
+};
+
+type UploaderMetadata = {
+  id: string | null;
+  name: string;
+  relation: string | null;
+};
+
+type RelationCode = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+type UploaderAliases = {
+  uploaderId: string | null;
+  uploaderName: string;
+  uploaderRelation: RelationCode | null;
+};
+
+type PhotoWithUploader = {
+  uploadedByGuest: UploaderMetadata | null;
+};
+
+const RELATION_CODES: Record<string, RelationCode> = {
+  PARENT: 1,
+  FRIEND: 2,
+  SIBLING: 3,
+  RELATIVE: 4,
+  COWORKER: 5,
+  ACQUAINTANCE: 6,
+  OTHER: 7,
+};
+
+type PhotoWithTakenAt = {
+  exifTakenAt: Date | null;
+  uploadedAt: Date;
+};
+
 @Injectable()
 export class PhotoService {
   constructor(
@@ -88,14 +125,7 @@ export class PhotoService {
       guest.eventId,
     );
 
-    return Promise.all(
-      photos.map(async (photo) => ({
-        ...photo,
-        originalPhotoUrl: await this.storageService.getReadUrl(
-          photo.originalObjectKey,
-        ),
-      })),
-    );
+    return this.withOriginalPhotoUrls(photos);
   }
 
   async remove(photoId: string, guestId: string) {
@@ -139,29 +169,34 @@ export class PhotoService {
         order,
       );
 
-    return { photos, pagination: { total, offset, page, pageSize: PAGE_SIZE } };
+    return {
+      photos: await this.withOriginalPhotoUrls(photos),
+      pagination: { total, offset, page, pageSize: PAGE_SIZE },
+    };
   }
 
   async getTimeline(userId: string, eventId: string) {
     await this.assertEventOwner(eventId, userId);
-    return this.photoRepository.findTimelineByEvent(eventId);
+    const photos = await this.photoRepository.findTimelineByEvent(eventId);
+    return this.groupByTimeline(await this.withOriginalPhotoUrls(photos));
   }
 
   async getFavoritePhotos(userId: string, eventId: string) {
     await this.assertEventOwner(eventId, userId);
-    return this.photoRepository.findAllByEvent(eventId, true);
+    const photos = await this.photoRepository.findAllByEvent(eventId, true);
+    return this.withOriginalPhotoUrls(photos);
   }
 
   async getGroupedByUploader(userId: string, eventId: string) {
     await this.assertEventOwner(eventId, userId);
     const photos = await this.photoRepository.findAllByEvent(eventId);
-    return this.groupByUploader(photos);
+    return this.groupByUploader(await this.withOriginalPhotoUrls(photos));
   }
 
   async getGroupedByComposition(userId: string, eventId: string) {
     await this.assertEventOwner(eventId, userId);
     const photos = await this.photoRepository.findEmbeddingsByEvent(eventId);
-    return this.groupByComposition(photos);
+    return this.groupByComposition(await this.withOriginalPhotoUrls(photos));
   }
 
   async getDetail(userId: string, photoId: string) {
@@ -174,18 +209,23 @@ export class PhotoService {
       throw new NotFoundException('Photo not found');
     }
 
+    const originalPhotoUrl = await this.storageService.getReadUrl(
+      photo.originalObjectKey,
+    );
+
     return {
       ...photo,
-      originalPhotoUrl: await this.storageService.getReadUrl(
-        photo.originalObjectKey,
-      ),
+      ...this.getPhotoUploaderAliases(photo),
+      originalPhotoUrl,
+      url: originalPhotoUrl,
+      signedUrl: originalPhotoUrl,
     };
   }
 
   async searchUploader(userId: string, eventId: string, name: string) {
     await this.assertEventOwner(eventId, userId);
     const photos = await this.photoRepository.searchUploaders(eventId, name);
-    return this.groupByUploader(photos);
+    return this.getUniqueUploaders(photos);
   }
 
   async toggleFavorite(userId: string, photoId: string) {
@@ -241,7 +281,10 @@ export class PhotoService {
         order,
       );
 
-    return { photos, pagination: { total, offset, page, pageSize: PAGE_SIZE } };
+    return {
+      photos: await this.withOriginalPhotoUrls(photos),
+      pagination: { total, offset, page, pageSize: PAGE_SIZE },
+    };
   }
 
   async addPhotosToGroup(
@@ -350,20 +393,146 @@ export class PhotoService {
     }
   }
 
-  private groupByUploader<
-    T extends {
-      uploadedByGuest: { name: string } | null;
-    },
-  >(photos: T[]) {
-    return photos.reduce<Record<string, T[]>>((groups, photo) => {
-      const uploaderName = photo.uploadedByGuest?.name ?? '익명';
-      groups[uploaderName] = [...(groups[uploaderName] ?? []), photo];
-      return groups;
-    }, {});
+  private async withOriginalPhotoUrls<T extends PhotoWithObjectKey>(
+    photos: T[],
+  ) {
+    return Promise.all(
+      photos.map(async (photo) => {
+        const originalPhotoUrl = await this.storageService.getReadUrl(
+          photo.originalObjectKey,
+        );
+
+        return {
+          ...photo,
+          ...this.getPhotoUploaderAliases(photo),
+          originalPhotoUrl,
+          url: originalPhotoUrl,
+          signedUrl: originalPhotoUrl,
+        };
+      }),
+    );
   }
 
-  private groupByComposition(photos: CompositionPhoto[]) {
-    const groups: Record<string, CompositionPhoto[]> = {};
+  private groupByTimeline<T extends PhotoWithTakenAt>(photos: T[]) {
+    const groups = new Map<string, T[]>();
+
+    for (const photo of photos) {
+      const takenAt = photo.exifTakenAt ?? photo.uploadedAt;
+      const key = this.formatTimelineKey(takenAt);
+      groups.set(key, [...(groups.get(key) ?? []), photo]);
+    }
+
+    return [...groups.entries()].map(([key, groupedPhotos]) => {
+      const [date, time] = key.split(' ');
+      return {
+        date,
+        time,
+        photos: groupedPhotos,
+        totalCount: groupedPhotos.length,
+      };
+    });
+  }
+
+  private formatTimelineKey(date: Date) {
+    return date.toISOString().slice(0, 16).replace('T', ' ');
+  }
+
+  private groupByUploader<T extends PhotoWithUploader>(photos: T[]) {
+    const groups = new Map<
+      string,
+      { uploader: UploaderMetadata; photos: T[] }
+    >();
+
+    for (const photo of photos) {
+      const uploader = this.getUploaderMetadata(photo);
+      const key = uploader.id ?? 'anonymous';
+      const group = groups.get(key) ?? { uploader, photos: [] };
+      groups.set(key, { ...group, photos: [...group.photos, photo] });
+    }
+
+    return [...groups.values()].map(({ uploader, photos: groupedPhotos }) => {
+      const aliases = this.getUploaderAliases(uploader);
+      return {
+        id: uploader.id,
+        uploaderId: aliases.uploaderId,
+        name: uploader.name,
+        uploaderName: aliases.uploaderName,
+        relation: aliases.uploaderRelation,
+        uploaderRelation: aliases.uploaderRelation,
+        uploader,
+        photos: groupedPhotos,
+        totalCount: groupedPhotos.length,
+      };
+    });
+  }
+
+  private getUniqueUploaders<T extends PhotoWithUploader>(photos: T[]) {
+    const uploaders = new Map<string, UploaderMetadata>();
+
+    for (const photo of photos) {
+      if (photo.uploadedByGuest?.id) {
+        uploaders.set(
+          photo.uploadedByGuest.id,
+          this.getUploaderMetadata(photo),
+        );
+      }
+    }
+
+    return [...uploaders.values()].map((uploader) => {
+      const aliases = this.getUploaderAliases(uploader);
+      return {
+        id: uploader.id,
+        uploaderId: aliases.uploaderId,
+        name: uploader.name,
+        uploaderName: aliases.uploaderName,
+        relation: aliases.uploaderRelation,
+        uploaderRelation: aliases.uploaderRelation,
+      };
+    });
+  }
+
+  private getPhotoUploaderAliases(photo: PhotoWithObjectKey) {
+    if (!this.hasUploaderMetadata(photo) || !photo.uploadedByGuest) {
+      return {};
+    }
+
+    return this.getUploaderAliases(photo.uploadedByGuest);
+  }
+
+  private hasUploaderMetadata(
+    photo: PhotoWithObjectKey,
+  ): photo is PhotoWithObjectKey & PhotoWithUploader {
+    return 'uploadedByGuest' in photo;
+  }
+
+  private getUploaderMetadata(photo: PhotoWithUploader): UploaderMetadata {
+    return (
+      photo.uploadedByGuest ?? {
+        id: null,
+        name: '익명',
+        relation: null,
+      }
+    );
+  }
+
+  private getUploaderAliases(uploader: UploaderMetadata): UploaderAliases {
+    return {
+      uploaderId: uploader.id,
+      uploaderName: uploader.name,
+      uploaderRelation: this.getRelationCode(uploader.relation),
+    };
+  }
+
+  private getRelationCode(relation: string | null): RelationCode | null {
+    if (!relation) {
+      return null;
+    }
+
+    return RELATION_CODES[relation] ?? null;
+  }
+
+  private groupByComposition<T extends CompositionPhoto>(photos: T[]) {
+    const groups: { groupName: string; photos: T[]; totalCount: number }[] = [];
     const visited = new Set<string>();
     let groupCount = 1;
 
@@ -391,7 +560,11 @@ export class PhotoService {
         }
       }
 
-      groups[`구도 ${groupCount}`] = currentGroup;
+      groups.push({
+        groupName: `구도 ${groupCount}`,
+        photos: currentGroup,
+        totalCount: currentGroup.length,
+      });
       groupCount += 1;
     }
 
