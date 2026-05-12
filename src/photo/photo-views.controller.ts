@@ -9,13 +9,26 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { SessionType } from '@prisma/client';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { PhotoService } from './photo.service';
 import {
   EventIdQueryDto,
   PhotoPaginationQueryDto,
 } from './dto/photo-query.dto';
 import { SearchUploaderDto } from './dto/search-uploader.dto';
+import {
+  PhotoPageResponseDto,
+  SignedPhotoResponseDto,
+  SimilarCompositionGroupResponseDto,
+  TimelineBucketResponseDto,
+  UploaderGroupResponseDto,
+  UploaderSearchResultResponseDto,
+} from './dto/photo-response.dto';
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request-types';
 
@@ -27,6 +40,7 @@ export class PhotoViewsController {
   constructor(private readonly photoService: PhotoService) {}
 
   @ApiOperation({ summary: 'Get all event photos with pagination' })
+  @ApiOkResponse({ type: PhotoPageResponseDto })
   @Get()
   getAlbum(
     @Req() req: AuthenticatedRequest,
@@ -43,6 +57,7 @@ export class PhotoViewsController {
   }
 
   @ApiOperation({ summary: 'Get event photo timeline' })
+  @ApiOkResponse({ type: [TimelineBucketResponseDto] })
   @Get('timeline')
   getTimeline(
     @Req() req: AuthenticatedRequest,
@@ -53,6 +68,7 @@ export class PhotoViewsController {
   }
 
   @ApiOperation({ summary: 'Get favorite photos for an event' })
+  @ApiOkResponse({ type: [SignedPhotoResponseDto] })
   @Get('favorites')
   getFavorites(
     @Req() req: AuthenticatedRequest,
@@ -63,6 +79,7 @@ export class PhotoViewsController {
   }
 
   @ApiOperation({ summary: 'Get photos grouped by similar composition' })
+  @ApiOkResponse({ type: [SimilarCompositionGroupResponseDto] })
   @Get('similar-composition')
   getSimilarComposition(
     @Req() req: AuthenticatedRequest,
@@ -76,6 +93,7 @@ export class PhotoViewsController {
   }
 
   @ApiOperation({ summary: 'Get photos grouped by uploader' })
+  @ApiOkResponse({ type: [UploaderGroupResponseDto] })
   @Get('uploader-grouping')
   getUploaderGrouping(
     @Req() req: AuthenticatedRequest,
@@ -86,6 +104,7 @@ export class PhotoViewsController {
   }
 
   @ApiOperation({ summary: 'Search uploader names by partial match' })
+  @ApiOkResponse({ type: [UploaderSearchResultResponseDto] })
   @Post('uploader-search')
   searchUploader(
     @Req() req: AuthenticatedRequest,

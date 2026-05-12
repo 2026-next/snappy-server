@@ -23,6 +23,12 @@ import {
 import { PhotoService } from './photo.service';
 import { CreatePhotoDto } from './dto/create-photo.dto';
 import { CreateUploadUrlsDto } from './dto/create-upload-urls.dto';
+import {
+  BasePhotoResponseDto,
+  CreateUploadUrlsResponseDto,
+  PhotoDetailResponseDto,
+  SignedPhotoResponseDto,
+} from './dto/photo-response.dto';
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request-types';
 
@@ -34,7 +40,10 @@ export class PhotoController {
   constructor(private readonly photoService: PhotoService) {}
 
   @ApiOperation({ summary: 'Create guest photo upload signed URLs' })
-  @ApiCreatedResponse({ description: 'Signed URLs created successfully' })
+  @ApiCreatedResponse({
+    description: 'Signed URLs created successfully',
+    type: CreateUploadUrlsResponseDto,
+  })
   @Post('upload-url')
   createUploadUrls(
     @Req() req: AuthenticatedRequest,
@@ -49,7 +58,10 @@ export class PhotoController {
   }
 
   @ApiOperation({ summary: 'Save guest uploaded photo metadata' })
-  @ApiCreatedResponse({ description: 'Photo metadata saved successfully' })
+  @ApiCreatedResponse({
+    description: 'Photo metadata saved successfully',
+    type: BasePhotoResponseDto,
+  })
   @ApiConflictResponse({
     description: 'Photo with the same file key already exists',
   })
@@ -63,6 +75,7 @@ export class PhotoController {
   }
 
   @ApiOperation({ summary: 'Get photos uploaded by the authenticated guest' })
+  @ApiOkResponse({ type: [SignedPhotoResponseDto] })
   @Get('my')
   findMyPhotos(@Req() req: AuthenticatedRequest) {
     this.assertGuest(req);
@@ -73,7 +86,26 @@ export class PhotoController {
     summary: 'Delete a photo uploaded by the authenticated guest',
   })
   @ApiNotFoundResponse({ description: 'Photo not found or not owned by guest' })
-  @ApiOkResponse({ description: 'Photo deleted successfully' })
+  @ApiOkResponse({
+    description:
+      'Photo deleted successfully. If already downloaded, returns a warning object instead of deleting.',
+    schema: {
+      oneOf: [
+        { type: 'null' },
+        {
+          type: 'object',
+          properties: {
+            photo: { type: 'object' },
+            deleted: { type: 'boolean', example: false },
+            warning: {
+              type: 'string',
+              example: '신랑/신부가 이미 사진을 다운받았을 수도 있습니다.',
+            },
+          },
+        },
+      ],
+    },
+  })
   @Delete(':photoId')
   remove(@Req() req: AuthenticatedRequest, @Param('photoId') photoId: string) {
     this.assertGuest(req);
@@ -81,6 +113,7 @@ export class PhotoController {
   }
 
   @ApiOperation({ summary: 'Get photo detail with original photo URL' })
+  @ApiOkResponse({ type: PhotoDetailResponseDto })
   @Get('detail/:photoId')
   getDetail(
     @Req() req: AuthenticatedRequest,
@@ -92,7 +125,10 @@ export class PhotoController {
 
   @ApiOperation({ summary: 'Toggle photo favorite status' })
   @ApiNotFoundResponse({ description: 'Photo not found' })
-  @ApiOkResponse({ description: 'Photo favorite status toggled successfully' })
+  @ApiOkResponse({
+    description: 'Photo favorite status toggled successfully',
+    type: BasePhotoResponseDto,
+  })
   @Patch(':photoId/favorite')
   toggleFavorite(
     @Req() req: AuthenticatedRequest,
