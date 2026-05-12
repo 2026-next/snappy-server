@@ -16,6 +16,7 @@ import {
   ApiBearerAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
@@ -23,6 +24,12 @@ import { PhotoService } from './photo.service';
 import { CreatePhotoGroupDto } from './dto/create-photo-group.dto';
 import { EventIdQueryDto, PaginationQueryDto } from './dto/photo-query.dto';
 import { PhotoGroupPhotosDto } from './dto/photo-group-photos.dto';
+import {
+  PhotoGroupMutationResponseDto,
+  PhotoGroupResponseDto,
+  PhotoPageResponseDto,
+  RemovePhotoFromGroupResponseDto,
+} from './dto/photo-response.dto';
 import { AccessTokenGuard } from '../auth/guards/access-token.guard';
 import type { AuthenticatedRequest } from '../auth/types/authenticated-request-types';
 
@@ -34,7 +41,10 @@ export class PhotoGroupsController {
   constructor(private readonly photoService: PhotoService) {}
 
   @ApiOperation({ summary: 'Create a custom photo group' })
-  @ApiCreatedResponse({ description: 'Photo group created successfully' })
+  @ApiCreatedResponse({
+    description: 'Photo group created successfully',
+    type: PhotoGroupResponseDto,
+  })
   @ApiConflictResponse({ description: 'Photo group name already exists' })
   @Post()
   createGroup(
@@ -49,6 +59,7 @@ export class PhotoGroupsController {
   }
 
   @ApiOperation({ summary: 'Get custom photo groups for an event' })
+  @ApiOkResponse({ type: [PhotoGroupResponseDto] })
   @Get()
   getGroups(@Req() req: AuthenticatedRequest, @Query() query: EventIdQueryDto) {
     this.assertUser(req);
@@ -56,6 +67,7 @@ export class PhotoGroupsController {
   }
 
   @ApiOperation({ summary: 'Get photos in a custom photo group' })
+  @ApiOkResponse({ type: PhotoPageResponseDto })
   @Get(':groupId/photos')
   getGroupPhotos(
     @Req() req: AuthenticatedRequest,
@@ -73,6 +85,7 @@ export class PhotoGroupsController {
   }
 
   @ApiOperation({ summary: 'Add photos to a custom photo group' })
+  @ApiCreatedResponse({ type: PhotoGroupMutationResponseDto })
   @Post(':groupId/photos')
   addGroupPhotos(
     @Req() req: AuthenticatedRequest,
@@ -88,6 +101,7 @@ export class PhotoGroupsController {
   }
 
   @ApiOperation({ summary: 'Replace photos in a custom photo group' })
+  @ApiOkResponse({ type: PhotoGroupMutationResponseDto })
   @Patch(':groupId/photos')
   replaceGroupPhotos(
     @Req() req: AuthenticatedRequest,
@@ -103,6 +117,7 @@ export class PhotoGroupsController {
   }
 
   @ApiOperation({ summary: 'Remove a photo from a custom photo group' })
+  @ApiOkResponse({ type: RemovePhotoFromGroupResponseDto })
   @Delete(':groupId/photos/:photoId')
   removeGroupPhoto(
     @Req() req: AuthenticatedRequest,
