@@ -10,7 +10,9 @@ import {
 } from '@nestjs/common';
 import { SessionType } from '@prisma/client';
 import {
+  ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiForbiddenResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -122,8 +124,26 @@ export class PhotoViewsController {
 
   @ApiOperation({
     summary: 'Search photos within an event by uploader name, message, or tag',
+    description:
+      'Returns photos in the given event whose uploader name OR uploader message (case-insensitive partial match) matches `q`. ' +
+      'Page size is fixed at 20 and pagination follows `skip = offset + (page - 1) * 20`. ' +
+      'When the result matched on message text, each photo carries a `matchedMessage` snippet (≤200 chars); ' +
+      'otherwise `matchedMessage` is `null`. ' +
+      'The `fields` query selects which sources to search; `tags` is accepted but currently a no-op because the Tag schema is not yet modeled. ' +
+      'LIKE wildcards (`%`, `_`, `\\`) in `q` are escaped server-side so user input cannot expand the pattern. ' +
+      'Accessible to event owners (USER session) and registered guests of that event (GUEST session).',
   })
-  @ApiOkResponse({ type: SearchPhotoPageResponseDto })
+  @ApiOkResponse({
+    description: 'Page of photos matching the query.',
+    type: SearchPhotoPageResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description:
+      'Validation failed: `q` empty/whitespace or >100 chars, `fields` contains an unknown value, or pagination params are out of range.',
+  })
+  @ApiForbiddenResponse({
+    description: 'Caller is neither the event owner nor a guest of the event.',
+  })
   @Get('search')
   search(
     @Req() req: AuthenticatedRequest,
