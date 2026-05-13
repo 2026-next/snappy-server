@@ -169,6 +169,24 @@ export class PhotoPageResponseDto {
   pagination!: PaginationResponseDto;
 }
 
+export class MatchedSignedPhotoResponseDto extends SignedPhotoResponseDto {
+  @ApiProperty({
+    nullable: true,
+    description:
+      'Up to 200-char snippet of the message that matched the search query, or null if the match did not come from message text.',
+    example: '결혼 축하합니다!',
+  })
+  matchedMessage!: string | null;
+}
+
+export class SearchPhotoPageResponseDto {
+  @ApiProperty({ type: () => MatchedSignedPhotoResponseDto, isArray: true })
+  photos!: MatchedSignedPhotoResponseDto[];
+
+  @ApiProperty({ type: () => PaginationResponseDto })
+  pagination!: PaginationResponseDto;
+}
+
 export class TimelineBucketResponseDto {
   @ApiProperty({ example: '2026-05-12' })
   date!: string;

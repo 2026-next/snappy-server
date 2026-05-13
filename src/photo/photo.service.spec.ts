@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { Test } from '@nestjs/testing';
+import { ForbiddenException } from '@nestjs/common';
+import { SessionType } from '@prisma/client';
 import { PhotoService } from './photo.service';
 import { PhotoRepository } from './repositories/photo.repository';
 import { PhotoAiRepository } from './repositories/photo-ai.repository';
@@ -79,6 +81,18 @@ describe('PhotoService', () => {
       jest.fn<(eventId: string) => Promise<OwnerPhoto[]>>(),
     searchUploaders:
       jest.fn<(eventId: string, name: string) => Promise<OwnerPhoto[]>>(),
+    searchPhotosByEventPaginated:
+      jest.fn<
+        (params: {
+          eventId: string;
+          query: string;
+          includeName: boolean;
+          includeMessage: boolean;
+          skip: number;
+          take: number;
+          order: 'asc' | 'desc';
+        }) => Promise<{ photos: OwnerPhoto[]; total: number }>
+      >(),
     findPhotoDetailForOwner:
       jest.fn<
         (photoId: string, userId: string) => Promise<OwnerPhoto | null>
@@ -520,6 +534,245 @@ describe('PhotoService', () => {
       uploadedByGuest: null,
       ...signedUrlFields('https://signed.example/detail/photo-1'),
       uploaderMessage: null,
+    });
+  });
+
+  describe('searchPhotos', () => {
+    const principalUser = { sub: 'user-1', sessionType: SessionType.USER };
+    const principalGuest = { sub: 'guest-1', sessionType: SessionType.GUEST };
+
+    it('returns photos matching by uploader name with null matchedMessage', async () => {
+      const photo = createPhoto('photo-1', 'search/photo-1');
+      photoRepository.searchPhotosByEventPaginated.mockResolvedValue({
+        photos: [photo],
+        total: 1,
+      });
+
+      const result = await service.searchPhotos(principalUser, {
+        eventId: 'event-1',
+        query: 'guest',
+        fields: ['name'],
+        offset: 0,
+        page: 1,
+        order: 'desc',
+      });
+
+      expect(result).toEqual({
+        photos: [
+          {
+            ...photo,
+            ...uploaderAliasFields('guest-1', 'Guest', 2),
+            ...signedUrlFields('https://signed.example/search/photo-1'),
+            matchedMessage: null,
+          },
+        ],
+        pagination: { total: 1, offset: 0, page: 1, pageSize: 20 },
+      });
+      expect(
+        photoRepository.searchPhotosByEventPaginated.mock.calls[0][0],
+      ).toEqual({
+        eventId: 'event-1',
+        query: 'guest',
+        includeName: true,
+        includeMessage: false,
+        skip: 0,
+        take: 20,
+        order: 'desc',
+      });
+    });
+
+    it('returns matchedMessage when message field matched and truncates to 200 chars', async () => {
+      const longMessage = 'A'.repeat(250);
+      const photo = createPhoto('photo-1', 'search/photo-1', {
+        uploadedByGuest: {
+          ...uploader,
+          messages: [
+            {
+              id: 'msg-1',
+              content: longMessage,
+              createdAt: new Date('2026-05-12T08:30:00.000Z'),
+              updatedAt: new Date('2026-05-12T08:30:00.000Z'),
+            },
+          ],
+        },
+      });
+      photoRepository.searchPhotosByEventPaginated.mockResolvedValue({
+        photos: [photo],
+        total: 1,
+      });
+
+      const result = await service.searchPhotos(principalUser, {
+        eventId: 'event-1',
+        query: 'A',
+        fields: ['name', 'message', 'tags'],
+        offset: 0,
+        page: 1,
+        order: 'desc',
+      });
+
+      expect(result.photos[0].matchedMessage).toBe('A'.repeat(200));
+      expect(result.photos[0]).not.toHaveProperty('uploadedByGuest.messages');
+    });
+
+    it('limits matching to name when fields=[name]', async () => {
+      photoRepository.searchPhotosByEventPaginated.mockResolvedValue({
+        photos: [],
+        total: 0,
+      });
+
+      await service.searchPhotos(principalUser, {
+        eventId: 'event-1',
+        query: 'q',
+        fields: ['name'],
+        offset: 0,
+        page: 1,
+        order: 'desc',
+      });
+
+      expect(
+        photoRepository.searchPhotosByEventPaginated.mock.calls[0][0],
+      ).toMatchObject({ includeName: true, includeMessage: false });
+    });
+
+    it('escapes LIKE wildcards (%, _, backslash) and single quote in query', async () => {
+      photoRepository.searchPhotosByEventPaginated.mockResolvedValue({
+        photos: [],
+        total: 0,
+      });
+
+      await service.searchPhotos(principalUser, {
+        eventId: 'event-1',
+        query: "100%_a\\b'c",
+        fields: ['name', 'message'],
+        offset: 0,
+        page: 1,
+        order: 'desc',
+      });
+
+      expect(
+        photoRepository.searchPhotosByEventPaginated.mock.calls[0][0].query,
+      ).toBe("100\\%\\_a\\\\b'c");
+    });
+
+    it('returns empty result when only tags field requested (tag schema not yet modeled)', async () => {
+      const result = await service.searchPhotos(principalUser, {
+        eventId: 'event-1',
+        query: 'q',
+        fields: ['tags'],
+        offset: 0,
+        page: 1,
+        order: 'desc',
+      });
+
+      expect(result).toEqual({
+        photos: [],
+        pagination: { total: 0, offset: 0, page: 1, pageSize: 20 },
+      });
+      expect(
+        photoRepository.searchPhotosByEventPaginated,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('honors pagination params in the request and response', async () => {
+      const photo = createPhoto('photo-1', 'search/photo-1');
+      photoRepository.searchPhotosByEventPaginated.mockResolvedValue({
+        photos: [photo],
+        total: 73,
+      });
+
+      const result = await service.searchPhotos(principalUser, {
+        eventId: 'event-1',
+        query: 'guest',
+        fields: ['name', 'message', 'tags'],
+        offset: 5,
+        page: 3,
+        order: 'asc',
+      });
+
+      expect(
+        photoRepository.searchPhotosByEventPaginated.mock.calls[0][0],
+      ).toMatchObject({
+        skip: 5 + (3 - 1) * 20,
+        take: 20,
+        order: 'asc',
+      });
+      expect(result.pagination).toEqual({
+        total: 73,
+        offset: 5,
+        page: 3,
+        pageSize: 20,
+      });
+    });
+
+    it('rejects empty/whitespace-only query', async () => {
+      await expect(
+        service.searchPhotos(principalUser, {
+          eventId: 'event-1',
+          query: '   ',
+          fields: ['name'],
+          offset: 0,
+          page: 1,
+          order: 'desc',
+        }),
+      ).rejects.toThrow(/empty/i);
+    });
+
+    it('allows guest principal that belongs to the event', async () => {
+      photoRepository.findGuestById.mockResolvedValue({
+        id: 'guest-1',
+        name: 'Guest',
+        eventId: 'event-1',
+      });
+      photoRepository.searchPhotosByEventPaginated.mockResolvedValue({
+        photos: [],
+        total: 0,
+      });
+
+      const result = await service.searchPhotos(principalGuest, {
+        eventId: 'event-1',
+        query: 'q',
+        fields: ['name'],
+        offset: 0,
+        page: 1,
+        order: 'desc',
+      });
+
+      expect(result.photos).toEqual([]);
+      expect(photoRepository.findEventOwnedByUser).not.toHaveBeenCalled();
+    });
+
+    it('rejects guest principal that belongs to a different event', async () => {
+      photoRepository.findGuestById.mockResolvedValue({
+        id: 'guest-1',
+        name: 'Guest',
+        eventId: 'event-other',
+      });
+
+      await expect(
+        service.searchPhotos(principalGuest, {
+          eventId: 'event-1',
+          query: 'q',
+          fields: ['name'],
+          offset: 0,
+          page: 1,
+          order: 'desc',
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('rejects user principal that does not own the event', async () => {
+      photoRepository.findEventOwnedByUser.mockResolvedValueOnce(null);
+
+      await expect(
+        service.searchPhotos(principalUser, {
+          eventId: 'event-1',
+          query: 'q',
+          fields: ['name'],
+          offset: 0,
+          page: 1,
+          order: 'desc',
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 });

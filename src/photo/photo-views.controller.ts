@@ -20,9 +20,11 @@ import {
   EventIdQueryDto,
   PhotoPaginationQueryDto,
 } from './dto/photo-query.dto';
+import { SearchPhotosQueryDto } from './dto/search-photos.dto';
 import { SearchUploaderDto } from './dto/search-uploader.dto';
 import {
   PhotoPageResponseDto,
+  SearchPhotoPageResponseDto,
   SignedPhotoResponseDto,
   SimilarCompositionGroupResponseDto,
   TimelineBucketResponseDto,
@@ -115,6 +117,28 @@ export class PhotoViewsController {
       req.user.sub,
       searchUploaderDto.eventId,
       searchUploaderDto.name,
+    );
+  }
+
+  @ApiOperation({
+    summary: 'Search photos within an event by uploader name, message, or tag',
+  })
+  @ApiOkResponse({ type: SearchPhotoPageResponseDto })
+  @Get('search')
+  search(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: SearchPhotosQueryDto,
+  ) {
+    return this.photoService.searchPhotos(
+      { sub: req.user.sub, sessionType: req.user.sessionType },
+      {
+        eventId: query.eventId,
+        query: query.q,
+        fields: query.fields,
+        offset: query.offset,
+        page: query.page,
+        order: query.order,
+      },
     );
   }
 
