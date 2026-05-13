@@ -16,16 +16,20 @@ export const SEARCH_FIELD_VALUES = ['name', 'message', 'tags'] as const;
 export type SearchField = (typeof SEARCH_FIELD_VALUES)[number];
 
 export class SearchPhotosQueryDto {
-  @ApiProperty({ description: 'Event ID' })
+  @ApiProperty({
+    description: 'Event ID to scope the search to.',
+    example: 'event-uuid',
+  })
   @IsString()
   @IsNotEmpty()
   eventId!: string;
 
   @ApiProperty({
     description:
-      'Free-text query (1..100 chars). Matched against uploader name, attached message, and tags (when available).',
+      'Free-text query (1..100 chars, trimmed). Matched case-insensitively against the selected `fields`. LIKE wildcards (`%`, `_`, `\\`) are escaped server-side.',
     minLength: 1,
     maxLength: 100,
+    example: '민준',
   })
   @IsString()
   @Transform(({ value }: { value: unknown }) =>
@@ -35,14 +39,25 @@ export class SearchPhotosQueryDto {
   @Length(1, 100)
   q!: string;
 
-  @ApiPropertyOptional({ description: 'Offset', default: 0 })
+  @ApiPropertyOptional({
+    description:
+      'Row offset applied before page-based skipping. Effective skip = `offset + (page - 1) * pageSize`.',
+    default: 0,
+    minimum: 0,
+    example: 0,
+  })
   @Type(() => Number)
   @IsInt()
   @Min(0)
   @IsOptional()
   offset = 0;
 
-  @ApiPropertyOptional({ description: 'Page Number', default: 1 })
+  @ApiPropertyOptional({
+    description: '1-based page number. Page size is fixed at 20.',
+    default: 1,
+    minimum: 1,
+    example: 1,
+  })
   @Type(() => Number)
   @IsInt()
   @Min(1)
@@ -50,9 +65,10 @@ export class SearchPhotosQueryDto {
   page = 1;
 
   @ApiPropertyOptional({
-    description: 'Sorting Order by photo.createdAt',
+    description: 'Sorting order applied to `photo.createdAt`.',
     enum: ['asc', 'desc'],
     default: 'desc',
+    example: 'desc',
   })
   @IsIn(['asc', 'desc'])
   @IsOptional()
@@ -60,10 +76,11 @@ export class SearchPhotosQueryDto {
 
   @ApiPropertyOptional({
     description:
-      'Comma-separated list of fields to match. Allowed: name, message, tags.',
+      'Comma-separated list of fields to match. Allowed values: `name` (uploader name), `message` (message authored by the uploader), `tags` (no-op until the Tag schema is added). Send as repeated query params or a comma-separated string, e.g. `fields=name,message`.',
     enum: SEARCH_FIELD_VALUES,
     isArray: true,
     default: ['name', 'message', 'tags'],
+    example: ['name', 'message'],
   })
   @Transform(({ value }: { value: unknown }): unknown => {
     if (Array.isArray(value)) {

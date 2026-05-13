@@ -171,19 +171,28 @@ export class PhotoPageResponseDto {
 
 export class MatchedSignedPhotoResponseDto extends SignedPhotoResponseDto {
   @ApiProperty({
+    type: String,
     nullable: true,
     description:
-      'Up to 200-char snippet of the message that matched the search query, or null if the match did not come from message text.',
+      'Up to 200-char snippet of the message that matched the search query, or null if the match did not come from message text. Clients can use this to highlight the matched portion in the UI.',
     example: '결혼 축하합니다!',
   })
   matchedMessage!: string | null;
 }
 
 export class SearchPhotoPageResponseDto {
-  @ApiProperty({ type: () => MatchedSignedPhotoResponseDto, isArray: true })
+  @ApiProperty({
+    type: () => MatchedSignedPhotoResponseDto,
+    isArray: true,
+    description: 'Photos matching the search query for the current page.',
+  })
   photos!: MatchedSignedPhotoResponseDto[];
 
-  @ApiProperty({ type: () => PaginationResponseDto })
+  @ApiProperty({
+    type: () => PaginationResponseDto,
+    description:
+      'Pagination metadata. `pageSize` is fixed at 20 by the server.',
+  })
   pagination!: PaginationResponseDto;
 }
 
