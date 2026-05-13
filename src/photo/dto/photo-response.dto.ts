@@ -120,9 +120,31 @@ export class PhotoEventSummaryResponseDto {
   name!: string;
 }
 
+export class UploaderMessageResponseDto {
+  @ApiProperty({ example: 'message-uuid' })
+  id!: string;
+
+  @ApiProperty({ example: '결혼 축하합니다!' })
+  content!: string;
+
+  @ApiProperty({ example: '2026-05-12T08:30:00.000Z' })
+  createdAt!: Date;
+
+  @ApiProperty({ example: '2026-05-12T08:30:00.000Z' })
+  updatedAt!: Date;
+}
+
 export class PhotoDetailResponseDto extends SignedPhotoResponseDto {
   @ApiPropertyOptional({ type: () => PhotoEventSummaryResponseDto })
   event?: PhotoEventSummaryResponseDto;
+
+  @ApiPropertyOptional({
+    type: () => UploaderMessageResponseDto,
+    nullable: true,
+    description:
+      'Congratulatory message authored by the uploader guest (null if none)',
+  })
+  uploaderMessage?: UploaderMessageResponseDto | null;
 }
 
 export class PaginationResponseDto {

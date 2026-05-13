@@ -27,12 +27,21 @@ type GuestPhoto = {
   originalObjectKey: string;
 };
 
+type UploaderMessage = {
+  id: string;
+  content: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type UploaderWithMessages = Uploader & { messages?: UploaderMessage[] };
+
 type OwnerPhoto = {
   id: string;
   originalObjectKey: string;
   uploadedAt: Date;
   exifTakenAt: Date | null;
-  uploadedByGuest: Uploader | null;
+  uploadedByGuest: UploaderWithMessages | null;
   embedding: number[];
   isFavorite: boolean;
 };
@@ -139,9 +148,9 @@ describe('PhotoService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     photoRepository.findEventOwnedByUser.mockResolvedValue({ id: 'event-1' });
-    storageService.getReadUrl.mockImplementation(async (fileKey) => {
-      return `https://signed.example/${fileKey}`;
-    });
+    storageService.getReadUrl.mockImplementation((fileKey) =>
+      Promise.resolve(`https://signed.example/${fileKey}`),
+    );
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -466,7 +475,51 @@ describe('PhotoService', () => {
       ...photo,
       ...uploaderAliasFields('guest-1', 'Guest', 2),
       ...signedUrlFields('https://signed.example/detail/photo-1'),
+      uploaderMessage: null,
     });
     expect(storageService.getReadUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it('includes uploader message when uploader has authored one', async () => {
+    const messageRecord: UploaderMessage = {
+      id: 'message-1',
+      content: '결혼 축하합니다!',
+      createdAt: new Date('2026-05-12T08:30:00.000Z'),
+      updatedAt: new Date('2026-05-12T08:30:00.000Z'),
+    };
+    const uploaderWithMessage: UploaderWithMessages = {
+      ...uploader,
+      messages: [messageRecord],
+    };
+    const photo = createPhoto('photo-1', 'detail/photo-1', {
+      uploadedByGuest: uploaderWithMessage,
+    });
+    photoRepository.findPhotoDetailForOwner.mockResolvedValue(photo);
+
+    const detail = await service.getDetail('user-1', 'photo-1');
+
+    expect(detail).toEqual({
+      ...photo,
+      uploadedByGuest: uploader,
+      ...uploaderAliasFields('guest-1', 'Guest', 2),
+      ...signedUrlFields('https://signed.example/detail/photo-1'),
+      uploaderMessage: messageRecord,
+    });
+  });
+
+  it('returns null uploaderMessage when uploader is missing', async () => {
+    const photo = createPhoto('photo-1', 'detail/photo-1', {
+      uploadedByGuest: null,
+    });
+    photoRepository.findPhotoDetailForOwner.mockResolvedValue(photo);
+
+    const detail = await service.getDetail('user-1', 'photo-1');
+
+    expect(detail).toEqual({
+      ...photo,
+      uploadedByGuest: null,
+      ...signedUrlFields('https://signed.example/detail/photo-1'),
+      uploaderMessage: null,
+    });
   });
 });

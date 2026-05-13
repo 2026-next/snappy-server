@@ -241,12 +241,32 @@ export class PhotoService {
       photo.originalObjectKey,
     );
 
+    const uploaderMessageRecord = photo.uploadedByGuest?.messages?.[0] ?? null;
+    const uploaderMessage = uploaderMessageRecord
+      ? {
+          id: uploaderMessageRecord.id,
+          content: uploaderMessageRecord.content,
+          createdAt: uploaderMessageRecord.createdAt,
+          updatedAt: uploaderMessageRecord.updatedAt,
+        }
+      : null;
+    const uploadedByGuest = photo.uploadedByGuest
+      ? {
+          id: photo.uploadedByGuest.id,
+          name: photo.uploadedByGuest.name,
+          relation: photo.uploadedByGuest.relation,
+        }
+      : null;
+
+    const photoWithoutMessages = { ...photo, uploadedByGuest };
+
     return {
-      ...photo,
-      ...this.getPhotoUploaderAliases(photo),
+      ...photoWithoutMessages,
+      ...this.getPhotoUploaderAliases(photoWithoutMessages),
       originalPhotoUrl,
       url: originalPhotoUrl,
       signedUrl: originalPhotoUrl,
+      uploaderMessage,
     };
   }
 
