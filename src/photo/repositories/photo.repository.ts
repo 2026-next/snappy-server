@@ -21,6 +21,15 @@ export type CreatePhotoGroupData = {
   photoIds?: string[];
 };
 
+/**
+ * Common predicate applied to every host-facing photo query so photos that the
+ * host has hidden (via DELETE /photo/host/:photoId) disappear from album views,
+ * timelines, favorites, groupings, search, photo detail, and photo groups.
+ * Guest-facing endpoints (e.g. /photo/my) intentionally do NOT use this so the
+ * uploader still sees their own photo.
+ */
+const VISIBLE_TO_HOST = { hiddenByHostAt: null } as const;
+
 @Injectable()
 export class PhotoRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -60,6 +69,7 @@ export class PhotoRepository {
       where: {
         eventId,
         isDeleted: false,
+        ...VISIBLE_TO_HOST,
         ...(onlyFavorites && { isFavorite: true }),
       },
       include: {
@@ -77,7 +87,7 @@ export class PhotoRepository {
     take: number,
     order: Prisma.SortOrder,
   ) {
-    const where = { eventId, isDeleted: false };
+    const where = { eventId, isDeleted: false, ...VISIBLE_TO_HOST };
     const [photos, total] = await this.prisma.$transaction([
       this.prisma.photo.findMany({
         where,
@@ -133,7 +143,7 @@ export class PhotoRepository {
 
   async findTimelineByEvent(eventId: string) {
     return this.prisma.photo.findMany({
-      where: { eventId, isDeleted: false },
+      where: { eventId, isDeleted: false, ...VISIBLE_TO_HOST },
       include: {
         uploadedByGuest: {
           select: { id: true, name: true, relation: true },
@@ -145,7 +155,7 @@ export class PhotoRepository {
 
   async findEmbeddingsByEvent(eventId: string) {
     return this.prisma.photo.findMany({
-      where: { eventId, isDeleted: false },
+      where: { eventId, isDeleted: false, ...VISIBLE_TO_HOST },
       select: {
         id: true,
         originalObjectKey: true,
@@ -162,7 +172,12 @@ export class PhotoRepository {
 
   async findPhotoDetailForOwner(photoId: string, userId: string) {
     return this.prisma.photo.findFirst({
-      where: { id: photoId, isDeleted: false, event: { ownerId: userId } },
+      where: {
+        id: photoId,
+        isDeleted: false,
+        ...VISIBLE_TO_HOST,
+        event: { ownerId: userId },
+      },
       include: {
         uploadedByGuest: {
           select: {
@@ -190,6 +205,7 @@ export class PhotoRepository {
       where: {
         eventId,
         isDeleted: false,
+        ...VISIBLE_TO_HOST,
         uploadedByGuest: { name: { contains: name, mode: 'insensitive' } },
       },
       include: {
@@ -238,6 +254,7 @@ export class PhotoRepository {
     const where: Prisma.PhotoWhereInput = {
       eventId,
       isDeleted: false,
+      ...VISIBLE_TO_HOST,
       OR: orClauses,
     };
 
@@ -271,7 +288,37 @@ export class PhotoRepository {
 
   async findPhotoForOwner(photoId: string, userId: string) {
     return this.prisma.photo.findFirst({
-      where: { id: photoId, isDeleted: false, event: { ownerId: userId } },
+      where: {
+        id: photoId,
+        isDeleted: false,
+        ...VISIBLE_TO_HOST,
+        event: { ownerId: userId },
+      },
+    });
+  }
+
+  /**
+   * Like {@link findPhotoForOwner} but does not exclude photos that the host
+   * has already hidden. Used by the host-delete endpoint so re-issuing
+   * DELETE /photo/host/:id stays idempotent (returns the same 204) instead of
+   * 404ing on the second call.
+   */
+  async findPhotoForHostIncludingHidden(photoId: string, userId: string) {
+    return this.prisma.photo.findFirst({
+      where: {
+        id: photoId,
+        isDeleted: false,
+        event: { ownerId: userId },
+      },
+      select: { id: true, hiddenByHostAt: true },
+    });
+  }
+
+  async markPhotoHiddenByHost(photoId: string, hiddenAt: Date = new Date()) {
+    return this.prisma.photo.update({
+      where: { id: photoId },
+      data: { hiddenByHostAt: hiddenAt },
+      select: { id: true, hiddenByHostAt: true },
     });
   }
 
@@ -300,6 +347,7 @@ export class PhotoRepository {
       include: {
         _count: { select: { photos: true } },
         photos: {
+          where: { photo: { ...VISIBLE_TO_HOST } },
           take: 1,
           orderBy: { createdAt: 'asc' },
           include: { photo: true },
@@ -318,7 +366,12 @@ export class PhotoRepository {
 
   async findPhotosByIdsForEvent(eventId: string, photoIds: string[]) {
     return this.prisma.photo.findMany({
-      where: { id: { in: photoIds }, eventId, isDeleted: false },
+      where: {
+        id: { in: photoIds },
+        eventId,
+        isDeleted: false,
+        ...VISIBLE_TO_HOST,
+      },
       select: { id: true },
     });
   }
@@ -356,7 +409,10 @@ export class PhotoRepository {
     take: number,
     order: Prisma.SortOrder,
   ) {
-    const where = { groupId, photo: { isDeleted: false } };
+    const where = {
+      groupId,
+      photo: { isDeleted: false, ...VISIBLE_TO_HOST },
+    };
     const [links, total] = await this.prisma.$transaction([
       this.prisma.photoGroupPhoto.findMany({
         where,

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { Test } from '@nestjs/testing';
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { SessionType } from '@prisma/client';
 import { PhotoService } from './photo.service';
 import { PhotoRepository } from './repositories/photo.repository';
@@ -109,6 +109,20 @@ describe('PhotoService', () => {
           take: number,
           order: 'asc' | 'desc',
         ) => Promise<{ photos: OwnerPhoto[]; total: number }>
+      >(),
+    findPhotoForHostIncludingHidden:
+      jest.fn<
+        (
+          photoId: string,
+          userId: string,
+        ) => Promise<{ id: string; hiddenByHostAt: Date | null } | null>
+      >(),
+    markPhotoHiddenByHost:
+      jest.fn<
+        (
+          photoId: string,
+          hiddenAt?: Date,
+        ) => Promise<{ id: string; hiddenByHostAt: Date }>
       >(),
   };
   const storageService = {
@@ -773,6 +787,63 @@ describe('PhotoService', () => {
           order: 'desc',
         }),
       ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('hidePhotoForHost', () => {
+    it('marks the photo hidden when host owns the event and photo is visible', async () => {
+      photoRepository.findPhotoForHostIncludingHidden.mockResolvedValue({
+        id: 'photo-1',
+        hiddenByHostAt: null,
+      });
+      photoRepository.markPhotoHiddenByHost.mockResolvedValue({
+        id: 'photo-1',
+        hiddenByHostAt: new Date('2026-05-13T12:00:00.000Z'),
+      });
+
+      await service.hidePhotoForHost('user-1', 'photo-1');
+
+      expect(
+        photoRepository.findPhotoForHostIncludingHidden,
+      ).toHaveBeenCalledWith('photo-1', 'user-1');
+      expect(photoRepository.markPhotoHiddenByHost).toHaveBeenCalledWith(
+        'photo-1',
+      );
+    });
+
+    it('is idempotent when the photo is already hidden', async () => {
+      photoRepository.findPhotoForHostIncludingHidden.mockResolvedValue({
+        id: 'photo-1',
+        hiddenByHostAt: new Date('2026-05-12T00:00:00.000Z'),
+      });
+
+      await service.hidePhotoForHost('user-1', 'photo-1');
+
+      expect(photoRepository.markPhotoHiddenByHost).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when photo is missing or not in an event the host owns', async () => {
+      photoRepository.findPhotoForHostIncludingHidden.mockResolvedValue(null);
+
+      await expect(
+        service.hidePhotoForHost('user-1', 'photo-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(photoRepository.markPhotoHiddenByHost).not.toHaveBeenCalled();
+    });
+
+    it('does not touch storage', async () => {
+      photoRepository.findPhotoForHostIncludingHidden.mockResolvedValue({
+        id: 'photo-1',
+        hiddenByHostAt: null,
+      });
+      photoRepository.markPhotoHiddenByHost.mockResolvedValue({
+        id: 'photo-1',
+        hiddenByHostAt: new Date('2026-05-13T12:00:00.000Z'),
+      });
+
+      await service.hidePhotoForHost('user-1', 'photo-1');
+
+      expect(storageService.getReadUrl).not.toHaveBeenCalled();
     });
   });
 });
