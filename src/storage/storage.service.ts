@@ -103,4 +103,47 @@ export class StorageService {
       throw new InternalServerErrorException('GCS object deletion failed');
     }
   }
+
+  async downloadObject(
+    fileKey: string,
+  ): Promise<{ buffer: Buffer; contentType: string }> {
+    if (!this.bucketName) {
+      throw new InternalServerErrorException('GCS bucket is not configured');
+    }
+
+    try {
+      const file = this.storage.bucket(this.bucketName).file(fileKey);
+      const [buffer] = await file.download();
+      const [metadata] = await file.getMetadata();
+      const contentType =
+        typeof metadata.contentType === 'string' &&
+        metadata.contentType.length > 0
+          ? metadata.contentType
+          : 'application/octet-stream';
+      return { buffer, contentType };
+    } catch {
+      throw new InternalServerErrorException('GCS object download failed');
+    }
+  }
+
+  async uploadEnhancedObject(
+    eventId: string,
+    buffer: Buffer,
+    mimeType: string,
+  ): Promise<string> {
+    if (!this.bucketName) {
+      throw new InternalServerErrorException('GCS bucket is not configured');
+    }
+
+    try {
+      const fileKey = `events/${eventId}/enhanced/${uuidv4()}`;
+      await this.storage.bucket(this.bucketName).file(fileKey).save(buffer, {
+        contentType: mimeType,
+        resumable: false,
+      });
+      return fileKey;
+    } catch {
+      throw new InternalServerErrorException('GCS object upload failed');
+    }
+  }
 }

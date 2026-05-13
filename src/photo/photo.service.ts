@@ -5,11 +5,14 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import type { Photo } from '@prisma/client';
 import { CreatePhotoDto } from './dto/create-photo.dto';
 import { CreatePhotoGroupDto } from './dto/create-photo-group.dto';
 import { PhotoGroupPhotosDto } from './dto/photo-group-photos.dto';
 import { PhotoRepository } from './repositories/photo.repository';
+import { PhotoAiRepository } from './repositories/photo-ai.repository';
 import { StorageService } from '../storage/storage.service';
+import { AnalysisWorkerService } from './workers/analysis-worker.service';
 
 const PAGE_SIZE = 20;
 const COMPOSITION_THRESHOLD = 0.85;
@@ -29,7 +32,9 @@ type CompositionPhoto = Awaited<
 export class PhotoService {
   constructor(
     private readonly photoRepository: PhotoRepository,
+    private readonly photoAiRepository: PhotoAiRepository,
     private readonly storageService: StorageService,
+    private readonly analysisWorker: AnalysisWorkerService,
   ) {}
 
   async getSignedUrls(guestId: string, mimeType: string, fileCount: number) {
@@ -58,8 +63,9 @@ export class PhotoService {
       this.assertSupportedMimeType(createPhotoDto.mimeType);
     }
 
+    let photo: Photo;
     try {
-      return this.photoRepository.createPhoto({
+      photo = await this.photoRepository.createPhoto({
         eventId: guest.eventId,
         guestId,
         originalObjectKey: createPhotoDto.fileKey,
@@ -76,9 +82,31 @@ export class PhotoService {
       if (this.isUniqueConstraintError(error)) {
         throw new ConflictException('Photo metadata already exists');
       }
-
       throw error;
     }
+
+    let analysisJobId: string | null = null;
+    try {
+      await this.photoAiRepository.createPhotoVersion({
+        photoId: photo.id,
+        fileKey: photo.originalObjectKey,
+        width: photo.width ?? null,
+        height: photo.height ?? null,
+        prompt: null,
+        isOriginal: true,
+      });
+
+      const analysisJob = await this.photoAiRepository.createAnalysisJob(
+        photo.id,
+      );
+      analysisJobId = analysisJob.id;
+      this.analysisWorker.start(analysisJob.id, photo.id);
+    } catch {
+      // Analysis bootstrap failure must not block photo creation
+      analysisJobId = null;
+    }
+
+    return { ...photo, analysisJobId };
   }
 
   async findAllByGuest(guestId: string) {
