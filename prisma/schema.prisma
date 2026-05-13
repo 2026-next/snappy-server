@@ -31,6 +31,13 @@ enum GuestRelation {
   OTHER
 }
 
+enum JobStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
 model User {
   id            String         @id @default(cuid())
   email         String?        @unique
@@ -117,10 +124,57 @@ model Photo {
   embedding         Float[]
   isFavorite        Boolean   @default(false)
   groupLinks        PhotoGroupPhoto[]
+  versions          PhotoVersion[]
+  analysisJob       PhotoAnalysisJob?
+  enhancementJobs   EnhancementJob[]
 
   @@index([eventId, uploadedAt])
   @@index([eventId, isDeleted, uploadedAt])
   @@index([eventId, uploadedByGuestId, uploadedAt])
+}
+
+model PhotoVersion {
+  id          String          @id @default(cuid())
+  photoId     String
+  photo       Photo           @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  fileKey     String
+  width       Int?
+  height      Int?
+  prompt      String?         @db.Text
+  isOriginal  Boolean         @default(false)
+  sourceJobId String?         @unique
+  sourceJob   EnhancementJob? @relation(fields: [sourceJobId], references: [id], onDelete: SetNull)
+  createdAt   DateTime        @default(now())
+
+  @@index([photoId, createdAt(sort: Desc)])
+}
+
+model PhotoAnalysisJob {
+  id           String    @id @default(cuid())
+  photoId      String    @unique
+  photo        Photo     @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  status       JobStatus @default(PENDING)
+  resultJson   Json?
+  errorCode    String?
+  errorMessage String?   @db.Text
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model EnhancementJob {
+  id            String        @id @default(cuid())
+  photoId       String
+  photo         Photo         @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  status        JobStatus     @default(PENDING)
+  prompt        String        @db.Text
+  resultVersion PhotoVersion?
+  errorCode     String?
+  errorMessage  String?       @db.Text
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([photoId, createdAt(sort: Desc)])
+  @@index([status])
 }
 
 model PhotoGroup {

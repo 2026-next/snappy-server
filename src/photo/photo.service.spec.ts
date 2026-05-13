@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { Test } from '@nestjs/testing';
 import { PhotoService } from './photo.service';
 import { PhotoRepository } from './repositories/photo.repository';
+import { PhotoAiRepository } from './repositories/photo-ai.repository';
 import { StorageService } from '../storage/storage.service';
+import { AnalysisWorkerService } from './workers/analysis-worker.service';
 
 jest.mock('uuid', () => ({ v4: () => 'mock-uuid' }));
 
@@ -89,6 +91,13 @@ describe('PhotoService', () => {
   const storageService = {
     getReadUrl: jest.fn<(fileKey: string) => Promise<string | null>>(),
   };
+  const photoAiRepository = {
+    createPhotoVersion: jest.fn(),
+    createAnalysisJob: jest.fn(),
+  };
+  const analysisWorker = {
+    start: jest.fn(),
+  };
 
   const uploader: Uploader = {
     id: 'guest-1',
@@ -138,7 +147,9 @@ describe('PhotoService', () => {
       providers: [
         PhotoService,
         { provide: PhotoRepository, useValue: photoRepository },
+        { provide: PhotoAiRepository, useValue: photoAiRepository },
         { provide: StorageService, useValue: storageService },
+        { provide: AnalysisWorkerService, useValue: analysisWorker },
       ],
     }).compile();
 
