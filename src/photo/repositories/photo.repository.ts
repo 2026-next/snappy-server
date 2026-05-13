@@ -164,7 +164,22 @@ export class PhotoRepository {
     return this.prisma.photo.findFirst({
       where: { id: photoId, isDeleted: false, event: { ownerId: userId } },
       include: {
-        uploadedByGuest: { select: { id: true, name: true, relation: true } },
+        uploadedByGuest: {
+          select: {
+            id: true,
+            name: true,
+            relation: true,
+            messages: {
+              select: {
+                id: true,
+                content: true,
+                createdAt: true,
+                updatedAt: true,
+              },
+              take: 1,
+            },
+          },
+        },
         event: { select: { id: true, name: true } },
       },
     });
