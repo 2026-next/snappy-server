@@ -201,6 +201,74 @@ export class PhotoRepository {
     });
   }
 
+  async searchPhotosByEventPaginated(params: {
+    eventId: string;
+    query: string;
+    includeName: boolean;
+    includeMessage: boolean;
+    skip: number;
+    take: number;
+    order: Prisma.SortOrder;
+  }) {
+    const { eventId, query, includeName, includeMessage, skip, take, order } =
+      params;
+
+    const orClauses: Prisma.PhotoWhereInput[] = [];
+    if (includeName) {
+      orClauses.push({
+        uploadedByGuest: {
+          name: { contains: query, mode: 'insensitive' },
+        },
+      });
+    }
+    if (includeMessage) {
+      orClauses.push({
+        uploadedByGuest: {
+          messages: {
+            some: { content: { contains: query, mode: 'insensitive' } },
+          },
+        },
+      });
+    }
+
+    if (orClauses.length === 0) {
+      return { photos: [], total: 0 };
+    }
+
+    const where: Prisma.PhotoWhereInput = {
+      eventId,
+      isDeleted: false,
+      OR: orClauses,
+    };
+
+    const uploaderSelect: Prisma.GuestSelect = {
+      id: true,
+      name: true,
+      relation: true,
+    };
+
+    if (includeMessage) {
+      uploaderSelect.messages = {
+        where: { content: { contains: query, mode: 'insensitive' } },
+        select: { content: true },
+        take: 1,
+      };
+    }
+
+    const [photos, total] = await this.prisma.$transaction([
+      this.prisma.photo.findMany({
+        where,
+        include: { uploadedByGuest: { select: uploaderSelect } },
+        orderBy: { createdAt: order },
+        skip,
+        take,
+      }),
+      this.prisma.photo.count({ where }),
+    ]);
+
+    return { photos, total };
+  }
+
   async findPhotoForOwner(photoId: string, userId: string) {
     return this.prisma.photo.findFirst({
       where: { id: photoId, isDeleted: false, event: { ownerId: userId } },

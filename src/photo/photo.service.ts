@@ -5,16 +5,18 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import type { Photo } from '@prisma/client';
+import { SessionType, type Photo } from '@prisma/client';
 import { CreatePhotoDto } from './dto/create-photo.dto';
 import { CreatePhotoGroupDto } from './dto/create-photo-group.dto';
 import { PhotoGroupPhotosDto } from './dto/photo-group-photos.dto';
+import type { SearchField } from './dto/search-photos.dto';
 import { PhotoRepository } from './repositories/photo.repository';
 import { PhotoAiRepository } from './repositories/photo-ai.repository';
 import { StorageService } from '../storage/storage.service';
 import { AnalysisWorkerService } from './workers/analysis-worker.service';
 
 const PAGE_SIZE = 20;
+const MATCHED_MESSAGE_MAX_LENGTH = 200;
 const COMPOSITION_THRESHOLD = 0.85;
 const SUPPORTED_IMAGE_MIME_TYPES = new Set([
   'image/jpeg',
@@ -276,6 +278,95 @@ export class PhotoService {
     return this.getUniqueUploaders(photos);
   }
 
+  async searchPhotos(
+    principal: { sub: string; sessionType: SessionType },
+    params: {
+      eventId: string;
+      query: string;
+      fields: SearchField[];
+      offset: number;
+      page: number;
+      order: 'asc' | 'desc';
+    },
+  ) {
+    await this.assertEventAccess(params.eventId, principal);
+
+    const trimmedQuery = params.query.trim();
+    if (trimmedQuery.length === 0) {
+      throw new UnprocessableEntityException(
+        'Search query must not be empty or whitespace only',
+      );
+    }
+
+    const escapedQuery = this.escapeLikePattern(trimmedQuery);
+    const includeName = params.fields.includes('name');
+    const includeMessage = params.fields.includes('message');
+
+    if (!includeName && !includeMessage) {
+      // Only `tags` requested but tag schema not yet modeled — return empty.
+      return {
+        photos: [],
+        pagination: {
+          total: 0,
+          offset: params.offset,
+          page: params.page,
+          pageSize: PAGE_SIZE,
+        },
+      };
+    }
+
+    const skip = params.offset + (params.page - 1) * PAGE_SIZE;
+    const { photos, total } =
+      await this.photoRepository.searchPhotosByEventPaginated({
+        eventId: params.eventId,
+        query: escapedQuery,
+        includeName,
+        includeMessage,
+        skip,
+        take: PAGE_SIZE,
+        order: params.order,
+      });
+
+    const signedPhotos = await this.withOriginalPhotoUrls(photos);
+    const matchedPhotos = signedPhotos.map((photo) => {
+      const messages =
+        (
+          photo as {
+            uploadedByGuest?: { messages?: { content: string }[] } | null;
+          }
+        ).uploadedByGuest?.messages ?? [];
+      const firstMatch = includeMessage ? messages[0] : undefined;
+      const matchedMessage = firstMatch
+        ? this.truncateMatchedMessage(firstMatch.content)
+        : null;
+
+      const { uploadedByGuest, ...rest } = photo;
+      const cleanedUploadedByGuest = uploadedByGuest
+        ? {
+            id: uploadedByGuest.id,
+            name: uploadedByGuest.name,
+            relation: uploadedByGuest.relation,
+          }
+        : null;
+
+      return {
+        ...rest,
+        uploadedByGuest: cleanedUploadedByGuest,
+        matchedMessage,
+      };
+    });
+
+    return {
+      photos: matchedPhotos,
+      pagination: {
+        total,
+        offset: params.offset,
+        page: params.page,
+        pageSize: PAGE_SIZE,
+      },
+    };
+  }
+
   async toggleFavorite(userId: string, photoId: string) {
     const photo = await this.photoRepository.findPhotoForOwner(photoId, userId);
 
@@ -379,6 +470,37 @@ export class PhotoService {
     if (!event) {
       throw new ForbiddenException('Event access is denied');
     }
+  }
+
+  private async assertEventAccess(
+    eventId: string,
+    principal: { sub: string; sessionType: SessionType },
+  ) {
+    if (principal.sessionType === SessionType.USER) {
+      await this.assertEventOwner(eventId, principal.sub);
+      return;
+    }
+
+    if (principal.sessionType === SessionType.GUEST) {
+      const guest = await this.photoRepository.findGuestById(principal.sub);
+      if (!guest || guest.eventId !== eventId) {
+        throw new ForbiddenException('Event access is denied');
+      }
+      return;
+    }
+
+    throw new ForbiddenException('Event access is denied');
+  }
+
+  private escapeLikePattern(value: string): string {
+    return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+  }
+
+  private truncateMatchedMessage(content: string): string {
+    if (content.length <= MATCHED_MESSAGE_MAX_LENGTH) {
+      return content;
+    }
+    return content.slice(0, MATCHED_MESSAGE_MAX_LENGTH);
   }
 
   private async getGuestOrThrow(guestId: string) {
