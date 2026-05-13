@@ -377,6 +377,29 @@ export class PhotoService {
     return this.photoRepository.toggleFavorite(photoId, !photo.isFavorite);
   }
 
+  /**
+   * Host (event owner) soft-hides a photo from every host-facing query.
+   * The underlying object in storage is intentionally kept — the uploader
+   * guest still sees the photo in their own /photo/my listing. Idempotent:
+   * calling it on a photo that is already hidden is a no-op success.
+   */
+  async hidePhotoForHost(userId: string, photoId: string) {
+    const photo = await this.photoRepository.findPhotoForHostIncludingHidden(
+      photoId,
+      userId,
+    );
+
+    if (!photo) {
+      throw new NotFoundException('Photo not found');
+    }
+
+    if (photo.hiddenByHostAt) {
+      return;
+    }
+
+    await this.photoRepository.markPhotoHiddenByHost(photoId);
+  }
+
   async createPhotoGroup(userId: string, dto: CreatePhotoGroupDto) {
     await this.assertEventOwner(dto.eventId, userId);
     const photoIds = this.getUniquePhotoIds(dto.photoIds ?? []);

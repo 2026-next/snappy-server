@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   Patch,
   Post,
@@ -15,9 +16,12 @@ import {
   ApiBearerAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiForbiddenResponse,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
 import { PhotoService } from './photo.service';
@@ -136,6 +140,45 @@ export class PhotoController {
   ) {
     this.assertUser(req);
     return this.photoService.toggleFavorite(req.user.sub, photoId);
+  }
+
+  @ApiOperation({
+    summary: 'Delete any photo within an event owned by the authenticated host',
+    description:
+      'Soft-hides the photo from every host-facing query (album views, ' +
+      'timeline, favorites, uploader grouping, similar-composition grouping, ' +
+      'search, photo detail, photo groups). The underlying object in object ' +
+      'storage is intentionally NOT removed, and the uploader guest still ' +
+      'sees the photo in their own /photo/my listing. ' +
+      'Idempotent: calling DELETE on an already-hidden photo returns 204. ' +
+      'Requires a host (USER) access token; the principal must own the event ' +
+      'the photo belongs to. Distinct from `DELETE /photo/{photoId}` which ' +
+      'is the uploader-guest self-delete and removes the object from storage.',
+  })
+  @ApiParam({
+    name: 'photoId',
+    description: 'ID of the photo to hide from host views',
+    example: 'photo-uuid',
+  })
+  @ApiNoContentResponse({
+    description: 'Photo hidden from host views (or was already hidden).',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Caller is not authenticated as a host (USER session) OR does not own the event the photo belongs to.',
+  })
+  @ApiNotFoundResponse({
+    description:
+      'Photo does not exist, has been guest-deleted, or is outside any event the caller owns.',
+  })
+  @HttpCode(204)
+  @Delete('host/:photoId')
+  async hideForHost(
+    @Req() req: AuthenticatedRequest,
+    @Param('photoId') photoId: string,
+  ): Promise<void> {
+    this.assertUser(req);
+    await this.photoService.hidePhotoForHost(req.user.sub, photoId);
   }
 
   // Helper methods to assert session type
