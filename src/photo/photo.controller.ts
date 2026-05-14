@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { SessionType } from '@prisma/client';
 import {
+  ApiBadRequestResponse,
   ApiBearerAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
@@ -23,10 +24,13 @@ import {
   ApiOperation,
   ApiParam,
   ApiTags,
+  ApiUnauthorizedResponse,
+  ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { PhotoService } from './photo.service';
 import { CreatePhotoDto } from './dto/create-photo.dto';
 import { CreateUploadUrlsDto } from './dto/create-upload-urls.dto';
+import { ReplacePhotoFileDto } from './dto/replace-photo-file.dto';
 import {
   BasePhotoResponseDto,
   CreateUploadUrlsResponseDto,
@@ -179,6 +183,87 @@ export class PhotoController {
   ): Promise<void> {
     this.assertUser(req);
     await this.photoService.hidePhotoForHost(req.user.sub, photoId);
+  }
+
+  @ApiOperation({
+    summary: 'Replace the underlying file of an existing host-owned photo',
+    description:
+      'Host (event owner) overrides a photo in place with edited bytes — used ' +
+      'by the "기본 사진으로 저장" save mode in the host edit flow. ' +
+      'Compare with `POST /photo` which always creates a new photo record ' +
+      '(used by "새로운 사진으로 저장"). ' +
+      '\n\n' +
+      '**Preserved fields:** `id`, `eventId`, `uploadedByGuestId`, uploader ' +
+      'message, favorites, group memberships, `uploadedAt`, `createdAt`, ' +
+      '`exifTakenAt`. ' +
+      '\n\n' +
+      '**Mutated fields:** `originalObjectKey`, `mimeType`, `fileSizeBytes`, ' +
+      '`width`, `height`, `updatedAt` (auto-advanced). ' +
+      '\n\n' +
+      '**Side effects:** the previous storage object is best-effort deleted ' +
+      'after the metadata swap commits (failure to delete does NOT roll back ' +
+      'the swap). The matching `isOriginal` PhotoVersion row, if present, is ' +
+      'updated to point at the new `fileKey` so version listings stay ' +
+      'consistent with `Photo.originalObjectKey`. ' +
+      '\n\n' +
+      '**Auth:** caller must be authenticated as a host (USER session) and ' +
+      'must own the event the photo belongs to. Photos that have been ' +
+      'guest-deleted or host-hidden are not reachable via this endpoint.',
+  })
+  @ApiParam({
+    name: 'photoId',
+    description: 'ID of the photo whose underlying file will be swapped.',
+    example: 'photo-uuid',
+  })
+  @ApiOkResponse({
+    description:
+      'Photo file replaced. Returns the refreshed `PhotoDetailResponseDto` ' +
+      'with a freshly signed read URL pointing at the new object.',
+    type: PhotoDetailResponseDto,
+  })
+  @ApiBadRequestResponse({
+    description:
+      'Request body failed validation (e.g. missing/empty `fileKey`, missing ' +
+      '`mimeType`, non-integer dimensions, dimensions out of range, or ' +
+      'unknown properties — `forbidNonWhitelisted` is enabled globally).',
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Missing or invalid bearer access token.',
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Caller is not authenticated as a host (USER session) OR does not own ' +
+      'the event the photo belongs to.',
+  })
+  @ApiNotFoundResponse({
+    description:
+      'Photo does not exist, has been soft-deleted, host-hidden, or is ' +
+      'outside an event the caller owns.',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      'Business-rule failure (returned as 422): unsupported MIME type, ' +
+      "`fileKey` does not live under the photo's event prefix " +
+      '(`events/{photo.eventId}/...`), or `fileKey` equals the current ' +
+      '`originalObjectKey`.',
+  })
+  @ApiConflictResponse({
+    description:
+      'Another photo already references the supplied `fileKey` ' +
+      '(unique-constraint violation on `Photo.originalObjectKey`).',
+  })
+  @Post(':photoId/replace')
+  replaceFile(
+    @Req() req: AuthenticatedRequest,
+    @Param('photoId') photoId: string,
+    @Body() replacePhotoFileDto: ReplacePhotoFileDto,
+  ) {
+    this.assertUser(req);
+    return this.photoService.replacePhotoFile(
+      req.user.sub,
+      photoId,
+      replacePhotoFileDto,
+    );
   }
 
   // Helper methods to assert session type

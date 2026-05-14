@@ -299,6 +299,65 @@ export class PhotoRepository {
     });
   }
 
+  /**
+   * Lightweight host-owner lookup used by the file-replace flow. Returns just
+   * the fields needed to authorize the call and to delete the old object after
+   * the swap. Soft-deleted or host-hidden photos are excluded.
+   */
+  async findPhotoForHostReplacement(photoId: string, userId: string) {
+    return this.prisma.photo.findFirst({
+      where: {
+        id: photoId,
+        isDeleted: false,
+        ...VISIBLE_TO_HOST,
+        event: { ownerId: userId },
+      },
+      select: { id: true, eventId: true, originalObjectKey: true },
+    });
+  }
+
+  /**
+   * Atomically swap the photo's underlying file. The Photo row is updated in
+   * place (preserving id, eventId, uploader, message, group memberships,
+   * favorite status, createdAt, uploadedAt, exifTakenAt). The matching
+   * isOriginal PhotoVersion row, if any, is updated to point at the new
+   * fileKey so the version index stays consistent with Photo.originalObjectKey.
+   */
+  async replacePhotoFile(
+    photoId: string,
+    data: {
+      originalObjectKey: string;
+      mimeType: string;
+      fileSizeBytes: number | null;
+      width: number | null;
+      height: number | null;
+    },
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const photo = await tx.photo.update({
+        where: { id: photoId },
+        data: {
+          originalObjectKey: data.originalObjectKey,
+          mimeType: data.mimeType,
+          fileSizeBytes: data.fileSizeBytes,
+          width: data.width,
+          height: data.height,
+        },
+      });
+
+      await tx.photoVersion.updateMany({
+        where: { photoId, isOriginal: true },
+        data: {
+          fileKey: data.originalObjectKey,
+          width: data.width,
+          height: data.height,
+        },
+      });
+
+      return photo;
+    });
+  }
+
   async createPhotoGroup(data: CreatePhotoGroupData) {
     return this.prisma.photoGroup.create({
       data: {

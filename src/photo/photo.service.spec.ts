@@ -118,9 +118,34 @@ describe('PhotoService', () => {
           hiddenAt?: Date,
         ) => Promise<{ id: string; hiddenByHostAt: Date }>
       >(),
+    findPhotoForHostReplacement:
+      jest.fn<
+        (
+          photoId: string,
+          userId: string,
+        ) => Promise<{
+          id: string;
+          eventId: string;
+          originalObjectKey: string;
+        } | null>
+      >(),
+    replacePhotoFile:
+      jest.fn<
+        (
+          photoId: string,
+          data: {
+            originalObjectKey: string;
+            mimeType: string;
+            fileSizeBytes: number | null;
+            width: number | null;
+            height: number | null;
+          },
+        ) => Promise<{ id: string; originalObjectKey: string }>
+      >(),
   };
   const storageService = {
     getReadUrl: jest.fn<(fileKey: string) => Promise<string | null>>(),
+    deleteObject: jest.fn<(fileKey: string) => Promise<void>>(),
   };
   const photoAiRepository = {
     createPhotoVersion: jest.fn(),
@@ -176,6 +201,7 @@ describe('PhotoService', () => {
     storageService.getReadUrl.mockImplementation((fileKey) =>
       Promise.resolve(`https://signed.example/${fileKey}`),
     );
+    storageService.deleteObject.mockResolvedValue(undefined);
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -777,6 +803,135 @@ describe('PhotoService', () => {
       await service.hidePhotoForHost('user-1', 'photo-1');
 
       expect(storageService.getReadUrl).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('replacePhotoFile', () => {
+    const replacementDto = {
+      fileKey: 'events/event-1/edits/new-photo',
+      mimeType: 'image/jpeg',
+      fileSizeBytes: 4096,
+      width: 1920,
+      height: 1080,
+    };
+
+    const mockReplacedPhoto = createPhoto('photo-1', replacementDto.fileKey);
+
+    beforeEach(() => {
+      photoRepository.findPhotoForHostReplacement.mockResolvedValue({
+        id: 'photo-1',
+        eventId: 'event-1',
+        originalObjectKey: 'events/event-1/guest-1/old-photo',
+      });
+      photoRepository.replacePhotoFile.mockResolvedValue({
+        id: 'photo-1',
+        originalObjectKey: replacementDto.fileKey,
+      });
+      photoRepository.findPhotoDetailForOwner.mockResolvedValue(
+        mockReplacedPhoto,
+      );
+    });
+
+    it('updates file fields, deletes old object, and returns refreshed detail', async () => {
+      const result = await service.replacePhotoFile(
+        'user-1',
+        'photo-1',
+        replacementDto,
+      );
+
+      expect(photoRepository.findPhotoForHostReplacement).toHaveBeenCalledWith(
+        'photo-1',
+        'user-1',
+      );
+      expect(photoRepository.replacePhotoFile).toHaveBeenCalledWith('photo-1', {
+        originalObjectKey: replacementDto.fileKey,
+        mimeType: replacementDto.mimeType,
+        fileSizeBytes: replacementDto.fileSizeBytes,
+        width: replacementDto.width,
+        height: replacementDto.height,
+      });
+      expect(storageService.deleteObject).toHaveBeenCalledWith(
+        'events/event-1/guest-1/old-photo',
+      );
+      expect(result).toMatchObject({
+        id: 'photo-1',
+        originalObjectKey: replacementDto.fileKey,
+        ...signedUrlFields(`https://signed.example/${replacementDto.fileKey}`),
+        uploaderMessage: null,
+      });
+    });
+
+    it('coerces missing dimensions and size to null when sending to repo', async () => {
+      await service.replacePhotoFile('user-1', 'photo-1', {
+        fileKey: replacementDto.fileKey,
+        mimeType: replacementDto.mimeType,
+      });
+
+      expect(photoRepository.replacePhotoFile).toHaveBeenCalledWith('photo-1', {
+        originalObjectKey: replacementDto.fileKey,
+        mimeType: replacementDto.mimeType,
+        fileSizeBytes: null,
+        width: null,
+        height: null,
+      });
+    });
+
+    it('throws NotFoundException when host does not own the photo', async () => {
+      photoRepository.findPhotoForHostReplacement.mockResolvedValue(null);
+
+      await expect(
+        service.replacePhotoFile('user-1', 'photo-1', replacementDto),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(photoRepository.replacePhotoFile).not.toHaveBeenCalled();
+      expect(storageService.deleteObject).not.toHaveBeenCalled();
+    });
+
+    it('rejects fileKey outside the photo event prefix with 422', async () => {
+      await expect(
+        service.replacePhotoFile('user-1', 'photo-1', {
+          ...replacementDto,
+          fileKey: 'events/other-event/edits/new-photo',
+        }),
+      ).rejects.toMatchObject({ status: 422 });
+      expect(photoRepository.replacePhotoFile).not.toHaveBeenCalled();
+    });
+
+    it('rejects unsupported MIME types with 422', async () => {
+      await expect(
+        service.replacePhotoFile('user-1', 'photo-1', {
+          ...replacementDto,
+          mimeType: 'image/gif',
+        }),
+      ).rejects.toMatchObject({ status: 422 });
+      expect(photoRepository.replacePhotoFile).not.toHaveBeenCalled();
+    });
+
+    it('rejects when new fileKey matches the current originalObjectKey', async () => {
+      photoRepository.findPhotoForHostReplacement.mockResolvedValue({
+        id: 'photo-1',
+        eventId: 'event-1',
+        originalObjectKey: replacementDto.fileKey,
+      });
+
+      await expect(
+        service.replacePhotoFile('user-1', 'photo-1', replacementDto),
+      ).rejects.toMatchObject({ status: 422 });
+      expect(photoRepository.replacePhotoFile).not.toHaveBeenCalled();
+    });
+
+    it('does not roll back the swap when old-object deletion fails', async () => {
+      storageService.deleteObject.mockRejectedValueOnce(
+        new Error('GCS object deletion failed'),
+      );
+
+      const result = await service.replacePhotoFile(
+        'user-1',
+        'photo-1',
+        replacementDto,
+      );
+
+      expect(photoRepository.replacePhotoFile).toHaveBeenCalledTimes(1);
+      expect(result).toMatchObject({ id: 'photo-1' });
     });
   });
 });
