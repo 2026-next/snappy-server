@@ -46,6 +46,43 @@ export class StorageService {
     }
   }
 
+  /**
+   * Host-side signed-upload URLs used by the host edit flow ("기본 사진으로 저장"
+   * and "새로운 사진으로 저장" buttons). Keys live under
+   * `events/{eventId}/host-edits/{uuid}` so the host-only replace and create
+   * endpoints can validate the event prefix without conflicting with the
+   * guest `events/{eventId}/{guestId}/...` prefix.
+   */
+  async createHostEditUploadSignedUrls(
+    eventId: string,
+    mimeType: string,
+    fileCount: number,
+  ) {
+    if (!this.bucketName) {
+      throw new InternalServerErrorException('GCS bucket is not configured');
+    }
+
+    try {
+      return await Promise.all(
+        Array.from({ length: fileCount }, async () => {
+          const fileKey = `events/${eventId}/host-edits/${uuidv4()}`;
+          const [uploadUrl] = await this.storage
+            .bucket(this.bucketName)
+            .file(fileKey)
+            .getSignedUrl({
+              version: 'v4',
+              action: 'write',
+              expires: Date.now() + 5 * 60 * 1000,
+              contentType: mimeType,
+            });
+          return { uploadUrl, fileKey };
+        }),
+      );
+    } catch {
+      throw new InternalServerErrorException('GCS signed URL creation failed');
+    }
+  }
+
   async createEventThumbnailUploadSignedUrl(eventId: string, mimeType: string) {
     if (!this.bucketName) {
       throw new InternalServerErrorException('GCS bucket is not configured');

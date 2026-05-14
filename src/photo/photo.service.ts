@@ -6,6 +6,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { SessionType, type Photo } from '@prisma/client';
+import { CreateHostPhotoDto } from './dto/create-host-photo.dto';
 import { CreatePhotoDto } from './dto/create-photo.dto';
 import { CreatePhotoGroupDto } from './dto/create-photo-group.dto';
 import { PhotoGroupPhotosDto } from './dto/photo-group-photos.dto';
@@ -151,6 +152,87 @@ export class PhotoService {
     // Best-effort EXIF back-fill. Runs out-of-band in setImmediate; the
     // request response is unaffected. Any client-supplied exifTakenAt is
     // overwritten once the BE extraction succeeds (BE is the source of truth).
+    this.exifWorker.start(photo.id, photo.originalObjectKey);
+
+    return { ...photo, analysisJobId };
+  }
+
+  /**
+   * Host-side counterpart of {@link getSignedUrls}. Used by the host edit flow
+   * ("기본 사진으로 저장" / "새로운 사진으로 저장") to obtain signed PUT URLs
+   * under `events/{eventId}/host-edits/...` after asserting the caller owns
+   * the event.
+   */
+  async getHostSignedUrls(
+    userId: string,
+    eventId: string,
+    mimeType: string,
+    fileCount: number,
+  ) {
+    await this.assertEventOwner(eventId, userId);
+    this.assertSupportedMimeType(mimeType);
+
+    return {
+      uploadUrls: await this.storageService.createHostEditUploadSignedUrls(
+        eventId,
+        mimeType,
+        fileCount,
+      ),
+    };
+  }
+
+  /**
+   * Host-side counterpart of {@link create}. Creates a new photo record in an
+   * event the host owns — used by the "새로운 사진으로 저장" save mode where the
+   * host's edited bytes become a brand-new photo (no `uploadedByGuestId`).
+   * The supplied `fileKey` must live under the event prefix, which is the
+   * invariant established by `getHostSignedUrls`.
+   */
+  async createHostPhoto(userId: string, dto: CreateHostPhotoDto) {
+    await this.assertEventOwner(dto.eventId, userId);
+    this.assertValidEventFileKey(dto.fileKey, dto.eventId);
+    this.assertSupportedMimeType(dto.mimeType);
+
+    let photo: Photo;
+    try {
+      photo = await this.photoRepository.createPhoto({
+        eventId: dto.eventId,
+        guestId: null,
+        originalObjectKey: dto.fileKey,
+        mimeType: dto.mimeType,
+        fileSizeBytes: dto.fileSizeBytes,
+        width: dto.width,
+        height: dto.height,
+        exifTakenAt: dto.exifTakenAt ? new Date(dto.exifTakenAt) : undefined,
+        embedding: [],
+      });
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictException('Photo metadata already exists');
+      }
+      throw error;
+    }
+
+    let analysisJobId: string | null = null;
+    try {
+      await this.photoAiRepository.createPhotoVersion({
+        photoId: photo.id,
+        fileKey: photo.originalObjectKey,
+        width: photo.width ?? null,
+        height: photo.height ?? null,
+        prompt: null,
+        isOriginal: true,
+      });
+
+      const analysisJob = await this.photoAiRepository.createAnalysisJob(
+        photo.id,
+      );
+      analysisJobId = analysisJob.id;
+      this.analysisWorker.start(analysisJob.id, photo.id);
+    } catch {
+      analysisJobId = null;
+    }
+
     this.exifWorker.start(photo.id, photo.originalObjectKey);
 
     return { ...photo, analysisJobId };
