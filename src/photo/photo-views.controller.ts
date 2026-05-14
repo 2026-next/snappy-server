@@ -18,15 +18,11 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { PhotoService } from './photo.service';
-import {
-  EventIdQueryDto,
-  PhotoPaginationQueryDto,
-} from './dto/photo-query.dto';
+import { EventAlbumQueryDto, EventIdQueryDto } from './dto/photo-query.dto';
 import { SearchPhotosQueryDto } from './dto/search-photos.dto';
 import { SearchUploaderDto } from './dto/search-uploader.dto';
 import {
-  PhotoPageResponseDto,
-  SearchPhotoPageResponseDto,
+  MatchedSignedPhotoResponseDto,
   SignedPhotoResponseDto,
   SimilarCompositionGroupResponseDto,
   TimelineBucketResponseDto,
@@ -43,19 +39,17 @@ import type { AuthenticatedRequest } from '../auth/types/authenticated-request-t
 export class PhotoViewsController {
   constructor(private readonly photoService: PhotoService) {}
 
-  @ApiOperation({ summary: 'Get all event photos with pagination' })
-  @ApiOkResponse({ type: PhotoPageResponseDto })
+  @ApiOperation({ summary: 'Get every photo in the event (no pagination)' })
+  @ApiOkResponse({ type: [SignedPhotoResponseDto] })
   @Get()
   getAlbum(
     @Req() req: AuthenticatedRequest,
-    @Query() query: PhotoPaginationQueryDto,
+    @Query() query: EventAlbumQueryDto,
   ) {
     this.assertUser(req);
     return this.photoService.getFullAlbum(
       req.user.sub,
       query.eventId,
-      query.offset,
-      query.page,
       query.order,
     );
   }
@@ -125,8 +119,8 @@ export class PhotoViewsController {
   @ApiOperation({
     summary: 'Search photos within an event by uploader name, message, or tag',
     description:
-      'Returns photos in the given event whose uploader name OR uploader message (case-insensitive partial match) matches `q`. ' +
-      'Page size is fixed at 20 and pagination follows `skip = offset + (page - 1) * 20`. ' +
+      'Returns every photo in the given event whose uploader name OR uploader message (case-insensitive partial match) matches `q`. ' +
+      'No pagination is applied — all matching photos are returned. ' +
       'When the result matched on message text, each photo carries a `matchedMessage` snippet (≤200 chars); ' +
       'otherwise `matchedMessage` is `null`. ' +
       'The `fields` query selects which sources to search; `tags` is accepted but currently a no-op because the Tag schema is not yet modeled. ' +
@@ -134,12 +128,12 @@ export class PhotoViewsController {
       'Accessible to event owners (USER session) and registered guests of that event (GUEST session).',
   })
   @ApiOkResponse({
-    description: 'Page of photos matching the query.',
-    type: SearchPhotoPageResponseDto,
+    description: 'All photos matching the query.',
+    type: [MatchedSignedPhotoResponseDto],
   })
   @ApiBadRequestResponse({
     description:
-      'Validation failed: `q` empty/whitespace or >100 chars, `fields` contains an unknown value, or pagination params are out of range.',
+      'Validation failed: `q` empty/whitespace or >100 chars, or `fields` contains an unknown value.',
   })
   @ApiForbiddenResponse({
     description: 'Caller is neither the event owner nor a guest of the event.',
@@ -155,8 +149,6 @@ export class PhotoViewsController {
         eventId: query.eventId,
         query: query.q,
         fields: query.fields,
-        offset: query.offset,
-        page: query.page,
         order: query.order,
       },
     );
