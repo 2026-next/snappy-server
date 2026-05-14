@@ -9,6 +9,7 @@ import { SessionType, type Photo } from '@prisma/client';
 import { CreatePhotoDto } from './dto/create-photo.dto';
 import { CreatePhotoGroupDto } from './dto/create-photo-group.dto';
 import { PhotoGroupPhotosDto } from './dto/photo-group-photos.dto';
+import { ReplacePhotoFileDto } from './dto/replace-photo-file.dto';
 import type { SearchField } from './dto/search-photos.dto';
 import { PhotoRepository } from './repositories/photo.repository';
 import { PhotoAiRepository } from './repositories/photo-ai.repository';
@@ -369,6 +370,64 @@ export class PhotoService {
     await this.photoRepository.markPhotoHiddenByHost(photoId);
   }
 
+  /**
+   * Host overrides a photo's underlying file with edited bytes. The Photo row
+   * stays in place (same id, uploader, message, favorites, group memberships,
+   * uploadedAt/createdAt/exifTakenAt) — only the object key and derived file
+   * metadata change, and updatedAt advances. Old object is best-effort deleted.
+   */
+  async replacePhotoFile(
+    userId: string,
+    photoId: string,
+    dto: ReplacePhotoFileDto,
+  ) {
+    const existing = await this.photoRepository.findPhotoForHostReplacement(
+      photoId,
+      userId,
+    );
+
+    if (!existing) {
+      throw new NotFoundException('Photo not found');
+    }
+
+    this.assertSupportedMimeType(dto.mimeType);
+    this.assertValidEventFileKey(dto.fileKey, existing.eventId);
+
+    if (dto.fileKey === existing.originalObjectKey) {
+      throw new UnprocessableEntityException(
+        'New fileKey must differ from the current originalObjectKey',
+      );
+    }
+
+    try {
+      await this.photoRepository.replacePhotoFile(photoId, {
+        originalObjectKey: dto.fileKey,
+        mimeType: dto.mimeType,
+        fileSizeBytes: dto.fileSizeBytes ?? null,
+        width: dto.width ?? null,
+        height: dto.height ?? null,
+      });
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictException(
+          'Another photo already references that fileKey',
+        );
+      }
+      throw error;
+    }
+
+    // Best-effort cleanup of the prior file. Failure here must not roll back
+    // the replace — the metadata swap has already committed.
+    try {
+      await this.storageService.deleteObject(existing.originalObjectKey);
+    } catch {
+      // ignored — leaving an orphan object is preferable to surfacing a
+      // 500 after the DB swap already succeeded.
+    }
+
+    return this.getDetail(userId, photoId);
+  }
+
   async createPhotoGroup(userId: string, dto: CreatePhotoGroupDto) {
     await this.assertEventOwner(dto.eventId, userId);
     const photoIds = this.getUniquePhotoIds(dto.photoIds ?? []);
@@ -544,6 +603,13 @@ export class PhotoService {
     guestId: string,
   ) {
     const expectedPrefix = `events/${eventId}/${guestId}/`;
+    if (!fileKey.startsWith(expectedPrefix)) {
+      throw new UnprocessableEntityException('Invalid photo file key');
+    }
+  }
+
+  private assertValidEventFileKey(fileKey: string, eventId: string) {
+    const expectedPrefix = `events/${eventId}/`;
     if (!fileKey.startsWith(expectedPrefix)) {
       throw new UnprocessableEntityException('Invalid photo file key');
     }
