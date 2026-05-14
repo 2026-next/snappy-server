@@ -64,14 +64,9 @@ describe('PhotoService', () => {
       jest.fn<
         (eventId: string, userId: string) => Promise<{ id: string } | null>
       >(),
-    findAllByEventPaginated:
+    findAllByEventOrdered:
       jest.fn<
-        (
-          eventId: string,
-          skip: number,
-          take: number,
-          order: 'asc' | 'desc',
-        ) => Promise<{ photos: OwnerPhoto[]; total: number }>
+        (eventId: string, order: 'asc' | 'desc') => Promise<OwnerPhoto[]>
       >(),
     findTimelineByEvent: jest.fn<(eventId: string) => Promise<OwnerPhoto[]>>(),
     findAllByEvent:
@@ -82,17 +77,15 @@ describe('PhotoService', () => {
       jest.fn<(eventId: string) => Promise<OwnerPhoto[]>>(),
     searchUploaders:
       jest.fn<(eventId: string, name: string) => Promise<OwnerPhoto[]>>(),
-    searchPhotosByEventPaginated:
+    searchPhotosByEvent:
       jest.fn<
         (params: {
           eventId: string;
           query: string;
           includeName: boolean;
           includeMessage: boolean;
-          skip: number;
-          take: number;
           order: 'asc' | 'desc';
-        }) => Promise<{ photos: OwnerPhoto[]; total: number }>
+        }) => Promise<OwnerPhoto[]>
       >(),
     findPhotoDetailForOwner:
       jest.fn<
@@ -236,31 +229,23 @@ describe('PhotoService', () => {
     ]);
   });
 
-  it('adds compatible signed URL fields while preserving album pagination', async () => {
+  it('returns every event photo with signed URL fields and no pagination envelope', async () => {
     const photo = createPhoto('photo-1', 'album/photo-1');
-    photoRepository.findAllByEventPaginated.mockResolvedValue({
-      photos: [photo],
-      total: 42,
-    });
+    photoRepository.findAllByEventOrdered.mockResolvedValue([photo]);
 
-    const album = await service.getFullAlbum('user-1', 'event-1', 5, 2, 'desc');
+    const album = await service.getFullAlbum('user-1', 'event-1', 'desc');
 
-    expect(photoRepository.findAllByEventPaginated).toHaveBeenCalledWith(
+    expect(photoRepository.findAllByEventOrdered).toHaveBeenCalledWith(
       'event-1',
-      25,
-      20,
       'desc',
     );
-    expect(album).toEqual({
-      photos: [
-        {
-          ...photo,
-          ...uploaderAliasFields('guest-1', 'Guest', 2),
-          ...signedUrlFields('https://signed.example/album/photo-1'),
-        },
-      ],
-      pagination: { total: 42, offset: 5, page: 2, pageSize: 20 },
-    });
+    expect(album).toEqual([
+      {
+        ...photo,
+        ...uploaderAliasFields('guest-1', 'Guest', 2),
+        ...signedUrlFields('https://signed.example/album/photo-1'),
+      },
+    ]);
   });
 
   it('returns timeline buckets with signed photo URLs', async () => {
@@ -562,40 +547,28 @@ describe('PhotoService', () => {
 
     it('returns photos matching by uploader name with null matchedMessage', async () => {
       const photo = createPhoto('photo-1', 'search/photo-1');
-      photoRepository.searchPhotosByEventPaginated.mockResolvedValue({
-        photos: [photo],
-        total: 1,
-      });
+      photoRepository.searchPhotosByEvent.mockResolvedValue([photo]);
 
       const result = await service.searchPhotos(principalUser, {
         eventId: 'event-1',
         query: 'guest',
         fields: ['name'],
-        offset: 0,
-        page: 1,
         order: 'desc',
       });
 
-      expect(result).toEqual({
-        photos: [
-          {
-            ...photo,
-            ...uploaderAliasFields('guest-1', 'Guest', 2),
-            ...signedUrlFields('https://signed.example/search/photo-1'),
-            matchedMessage: null,
-          },
-        ],
-        pagination: { total: 1, offset: 0, page: 1, pageSize: 20 },
-      });
-      expect(
-        photoRepository.searchPhotosByEventPaginated.mock.calls[0][0],
-      ).toEqual({
+      expect(result).toEqual([
+        {
+          ...photo,
+          ...uploaderAliasFields('guest-1', 'Guest', 2),
+          ...signedUrlFields('https://signed.example/search/photo-1'),
+          matchedMessage: null,
+        },
+      ]);
+      expect(photoRepository.searchPhotosByEvent.mock.calls[0][0]).toEqual({
         eventId: 'event-1',
         query: 'guest',
         includeName: true,
         includeMessage: false,
-        skip: 0,
-        take: 20,
         order: 'desc',
       });
     });
@@ -615,62 +588,47 @@ describe('PhotoService', () => {
           ],
         },
       });
-      photoRepository.searchPhotosByEventPaginated.mockResolvedValue({
-        photos: [photo],
-        total: 1,
-      });
+      photoRepository.searchPhotosByEvent.mockResolvedValue([photo]);
 
       const result = await service.searchPhotos(principalUser, {
         eventId: 'event-1',
         query: 'A',
         fields: ['name', 'message', 'tags'],
-        offset: 0,
-        page: 1,
         order: 'desc',
       });
 
-      expect(result.photos[0].matchedMessage).toBe('A'.repeat(200));
-      expect(result.photos[0]).not.toHaveProperty('uploadedByGuest.messages');
+      expect(result[0].matchedMessage).toBe('A'.repeat(200));
+      expect(result[0]).not.toHaveProperty('uploadedByGuest.messages');
     });
 
     it('limits matching to name when fields=[name]', async () => {
-      photoRepository.searchPhotosByEventPaginated.mockResolvedValue({
-        photos: [],
-        total: 0,
-      });
+      photoRepository.searchPhotosByEvent.mockResolvedValue([]);
 
       await service.searchPhotos(principalUser, {
         eventId: 'event-1',
         query: 'q',
         fields: ['name'],
-        offset: 0,
-        page: 1,
         order: 'desc',
       });
 
       expect(
-        photoRepository.searchPhotosByEventPaginated.mock.calls[0][0],
+        photoRepository.searchPhotosByEvent.mock.calls[0][0],
       ).toMatchObject({ includeName: true, includeMessage: false });
     });
 
     it('escapes LIKE wildcards (%, _, backslash) and single quote in query', async () => {
-      photoRepository.searchPhotosByEventPaginated.mockResolvedValue({
-        photos: [],
-        total: 0,
-      });
+      photoRepository.searchPhotosByEvent.mockResolvedValue([]);
 
       await service.searchPhotos(principalUser, {
         eventId: 'event-1',
         query: "100%_a\\b'c",
         fields: ['name', 'message'],
-        offset: 0,
-        page: 1,
         order: 'desc',
       });
 
-      expect(
-        photoRepository.searchPhotosByEventPaginated.mock.calls[0][0].query,
-      ).toBe("100\\%\\_a\\\\b'c");
+      expect(photoRepository.searchPhotosByEvent.mock.calls[0][0].query).toBe(
+        "100\\%\\_a\\\\b'c",
+      );
     });
 
     it('returns empty result when only tags field requested (tag schema not yet modeled)', async () => {
@@ -678,49 +636,30 @@ describe('PhotoService', () => {
         eventId: 'event-1',
         query: 'q',
         fields: ['tags'],
-        offset: 0,
-        page: 1,
         order: 'desc',
       });
 
-      expect(result).toEqual({
-        photos: [],
-        pagination: { total: 0, offset: 0, page: 1, pageSize: 20 },
-      });
-      expect(
-        photoRepository.searchPhotosByEventPaginated,
-      ).not.toHaveBeenCalled();
+      expect(result).toEqual([]);
+      expect(photoRepository.searchPhotosByEvent).not.toHaveBeenCalled();
     });
 
-    it('honors pagination params in the request and response', async () => {
+    it('returns all matching photos without any pagination params', async () => {
       const photo = createPhoto('photo-1', 'search/photo-1');
-      photoRepository.searchPhotosByEventPaginated.mockResolvedValue({
-        photos: [photo],
-        total: 73,
-      });
+      photoRepository.searchPhotosByEvent.mockResolvedValue([photo]);
 
       const result = await service.searchPhotos(principalUser, {
         eventId: 'event-1',
         query: 'guest',
         fields: ['name', 'message', 'tags'],
-        offset: 5,
-        page: 3,
         order: 'asc',
       });
 
-      expect(
-        photoRepository.searchPhotosByEventPaginated.mock.calls[0][0],
-      ).toMatchObject({
-        skip: 5 + (3 - 1) * 20,
-        take: 20,
-        order: 'asc',
-      });
-      expect(result.pagination).toEqual({
-        total: 73,
-        offset: 5,
-        page: 3,
-        pageSize: 20,
-      });
+      const repoCall = photoRepository.searchPhotosByEvent.mock.calls[0][0];
+      expect(repoCall).not.toHaveProperty('skip');
+      expect(repoCall).not.toHaveProperty('take');
+      expect(repoCall.order).toBe('asc');
+      expect(Array.isArray(result)).toBe(true);
+      expect(result).toHaveLength(1);
     });
 
     it('rejects empty/whitespace-only query', async () => {
@@ -729,8 +668,6 @@ describe('PhotoService', () => {
           eventId: 'event-1',
           query: '   ',
           fields: ['name'],
-          offset: 0,
-          page: 1,
           order: 'desc',
         }),
       ).rejects.toThrow(/empty/i);
@@ -742,21 +679,16 @@ describe('PhotoService', () => {
         name: 'Guest',
         eventId: 'event-1',
       });
-      photoRepository.searchPhotosByEventPaginated.mockResolvedValue({
-        photos: [],
-        total: 0,
-      });
+      photoRepository.searchPhotosByEvent.mockResolvedValue([]);
 
       const result = await service.searchPhotos(principalGuest, {
         eventId: 'event-1',
         query: 'q',
         fields: ['name'],
-        offset: 0,
-        page: 1,
         order: 'desc',
       });
 
-      expect(result.photos).toEqual([]);
+      expect(result).toEqual([]);
       expect(photoRepository.findEventOwnedByUser).not.toHaveBeenCalled();
     });
 
@@ -772,8 +704,6 @@ describe('PhotoService', () => {
           eventId: 'event-1',
           query: 'q',
           fields: ['name'],
-          offset: 0,
-          page: 1,
           order: 'desc',
         }),
       ).rejects.toBeInstanceOf(ForbiddenException);
@@ -787,8 +717,6 @@ describe('PhotoService', () => {
           eventId: 'event-1',
           query: 'q',
           fields: ['name'],
-          offset: 0,
-          page: 1,
           order: 'desc',
         }),
       ).rejects.toBeInstanceOf(ForbiddenException);

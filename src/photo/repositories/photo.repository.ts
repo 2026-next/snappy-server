@@ -81,29 +81,16 @@ export class PhotoRepository {
     });
   }
 
-  async findAllByEventPaginated(
-    eventId: string,
-    skip: number,
-    take: number,
-    order: Prisma.SortOrder,
-  ) {
-    const where = { eventId, isDeleted: false, ...VISIBLE_TO_HOST };
-    const [photos, total] = await this.prisma.$transaction([
-      this.prisma.photo.findMany({
-        where,
-        include: {
-          uploadedByGuest: {
-            select: { id: true, name: true, relation: true },
-          },
+  async findAllByEventOrdered(eventId: string, order: Prisma.SortOrder) {
+    return this.prisma.photo.findMany({
+      where: { eventId, isDeleted: false, ...VISIBLE_TO_HOST },
+      include: {
+        uploadedByGuest: {
+          select: { id: true, name: true, relation: true },
         },
-        orderBy: { uploadedAt: order },
-        skip,
-        take,
-      }),
-      this.prisma.photo.count({ where }),
-    ]);
-
-    return { photos, total };
+      },
+      orderBy: { uploadedAt: order },
+    });
   }
 
   async findPhotosByGuest(guestId: string, eventId: string) {
@@ -217,17 +204,14 @@ export class PhotoRepository {
     });
   }
 
-  async searchPhotosByEventPaginated(params: {
+  async searchPhotosByEvent(params: {
     eventId: string;
     query: string;
     includeName: boolean;
     includeMessage: boolean;
-    skip: number;
-    take: number;
     order: Prisma.SortOrder;
   }) {
-    const { eventId, query, includeName, includeMessage, skip, take, order } =
-      params;
+    const { eventId, query, includeName, includeMessage, order } = params;
 
     const orClauses: Prisma.PhotoWhereInput[] = [];
     if (includeName) {
@@ -248,7 +232,7 @@ export class PhotoRepository {
     }
 
     if (orClauses.length === 0) {
-      return { photos: [], total: 0 };
+      return [];
     }
 
     const where: Prisma.PhotoWhereInput = {
@@ -272,18 +256,11 @@ export class PhotoRepository {
       };
     }
 
-    const [photos, total] = await this.prisma.$transaction([
-      this.prisma.photo.findMany({
-        where,
-        include: { uploadedByGuest: { select: uploaderSelect } },
-        orderBy: { createdAt: order },
-        skip,
-        take,
-      }),
-      this.prisma.photo.count({ where }),
-    ]);
-
-    return { photos, total };
+    return this.prisma.photo.findMany({
+      where,
+      include: { uploadedByGuest: { select: uploaderSelect } },
+      orderBy: { createdAt: order },
+    });
   }
 
   async findPhotoForOwner(photoId: string, userId: string) {

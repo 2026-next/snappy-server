@@ -1,14 +1,12 @@
-import { Transform, Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import {
   ArrayUnique,
   IsArray,
   IsIn,
-  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   Length,
-  Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -38,31 +36,6 @@ export class SearchPhotosQueryDto {
   @IsNotEmpty()
   @Length(1, 100)
   q!: string;
-
-  @ApiPropertyOptional({
-    description:
-      'Row offset applied before page-based skipping. Effective skip = `offset + (page - 1) * pageSize`.',
-    default: 0,
-    minimum: 0,
-    example: 0,
-  })
-  @Type(() => Number)
-  @IsInt()
-  @Min(0)
-  @IsOptional()
-  offset = 0;
-
-  @ApiPropertyOptional({
-    description: '1-based page number. Page size is fixed at 20.',
-    default: 1,
-    minimum: 1,
-    example: 1,
-  })
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @IsOptional()
-  page = 1;
 
   @ApiPropertyOptional({
     description: 'Sorting order applied to `photo.createdAt`.',

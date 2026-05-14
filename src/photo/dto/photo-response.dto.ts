@@ -180,22 +180,6 @@ export class MatchedSignedPhotoResponseDto extends SignedPhotoResponseDto {
   matchedMessage!: string | null;
 }
 
-export class SearchPhotoPageResponseDto {
-  @ApiProperty({
-    type: () => MatchedSignedPhotoResponseDto,
-    isArray: true,
-    description: 'Photos matching the search query for the current page.',
-  })
-  photos!: MatchedSignedPhotoResponseDto[];
-
-  @ApiProperty({
-    type: () => PaginationResponseDto,
-    description:
-      'Pagination metadata. `pageSize` is fixed at 20 by the server.',
-  })
-  pagination!: PaginationResponseDto;
-}
-
 export class TimelineBucketResponseDto {
   @ApiProperty({ example: '2026-05-12' })
   date!: string;

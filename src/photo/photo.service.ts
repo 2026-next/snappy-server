@@ -189,27 +189,13 @@ export class PhotoService {
     await this.storageService.deleteObject(photo.originalObjectKey);
   }
 
-  async getFullAlbum(
-    userId: string,
-    eventId: string,
-    offset: number,
-    page: number,
-    order: 'asc' | 'desc',
-  ) {
+  async getFullAlbum(userId: string, eventId: string, order: 'asc' | 'desc') {
     await this.assertEventOwner(eventId, userId);
-    const skip = offset + (page - 1) * PAGE_SIZE;
-    const { photos, total } =
-      await this.photoRepository.findAllByEventPaginated(
-        eventId,
-        skip,
-        PAGE_SIZE,
-        order,
-      );
-
-    return {
-      photos: await this.withOriginalPhotoUrls(photos),
-      pagination: { total, offset, page, pageSize: PAGE_SIZE },
-    };
+    const photos = await this.photoRepository.findAllByEventOrdered(
+      eventId,
+      order,
+    );
+    return this.withOriginalPhotoUrls(photos);
   }
 
   async getTimeline(userId: string, eventId: string) {
@@ -291,8 +277,6 @@ export class PhotoService {
       eventId: string;
       query: string;
       fields: SearchField[];
-      offset: number;
-      page: number;
       order: 'asc' | 'desc';
     },
   ) {
@@ -311,31 +295,19 @@ export class PhotoService {
 
     if (!includeName && !includeMessage) {
       // Only `tags` requested but tag schema not yet modeled — return empty.
-      return {
-        photos: [],
-        pagination: {
-          total: 0,
-          offset: params.offset,
-          page: params.page,
-          pageSize: PAGE_SIZE,
-        },
-      };
+      return [];
     }
 
-    const skip = params.offset + (params.page - 1) * PAGE_SIZE;
-    const { photos, total } =
-      await this.photoRepository.searchPhotosByEventPaginated({
-        eventId: params.eventId,
-        query: escapedQuery,
-        includeName,
-        includeMessage,
-        skip,
-        take: PAGE_SIZE,
-        order: params.order,
-      });
+    const photos = await this.photoRepository.searchPhotosByEvent({
+      eventId: params.eventId,
+      query: escapedQuery,
+      includeName,
+      includeMessage,
+      order: params.order,
+    });
 
     const signedPhotos = await this.withOriginalPhotoUrls(photos);
-    const matchedPhotos = signedPhotos.map((photo) => {
+    return signedPhotos.map((photo) => {
       const messages =
         (
           photo as {
@@ -362,16 +334,6 @@ export class PhotoService {
         matchedMessage,
       };
     });
-
-    return {
-      photos: matchedPhotos,
-      pagination: {
-        total,
-        offset: params.offset,
-        page: params.page,
-        pageSize: PAGE_SIZE,
-      },
-    };
   }
 
   async toggleFavorite(userId: string, photoId: string) {
