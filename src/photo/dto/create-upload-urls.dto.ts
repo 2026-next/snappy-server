@@ -3,11 +3,11 @@ import { IsIn, IsInt, IsNotEmpty, IsString, Max, Min } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateUploadUrlsDto {
-  @ApiProperty({ description: 'File Count to Upload', minimum: 1, maximum: 20 })
+  @ApiProperty({ description: 'File Count to Upload', minimum: 1, maximum: 200 })
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(20)
+  @Max(200)
   fileCount!: number;
 
   @ApiProperty({
