@@ -28,6 +28,8 @@ import {
   ApiUnprocessableEntityResponse,
 } from '@nestjs/swagger';
 import { PhotoService } from './photo.service';
+import { CreateHostPhotoDto } from './dto/create-host-photo.dto';
+import { CreateHostUploadUrlsDto } from './dto/create-host-upload-urls.dto';
 import { CreatePhotoDto } from './dto/create-photo.dto';
 import { CreateUploadUrlsDto } from './dto/create-upload-urls.dto';
 import { ReplacePhotoFileDto } from './dto/replace-photo-file.dto';
@@ -183,6 +185,73 @@ export class PhotoController {
   ): Promise<void> {
     this.assertUser(req);
     await this.photoService.hidePhotoForHost(req.user.sub, photoId);
+  }
+
+  @ApiOperation({
+    summary: 'Create host edit upload signed URLs for an event',
+    description:
+      'Host (event owner) variant of `POST /photo/upload-url`. Returns signed ' +
+      'PUT URLs under the `events/{eventId}/host-edits/...` prefix so the host ' +
+      'edit flow ("기본 사진으로 저장" / "새로운 사진으로 저장") can upload ' +
+      'edited bytes before calling `POST /photo/{photoId}/replace` or ' +
+      '`POST /photo/host`. The caller must own the supplied `eventId`.',
+  })
+  @ApiCreatedResponse({
+    description: 'Signed URLs created successfully',
+    type: CreateUploadUrlsResponseDto,
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Caller is not authenticated as a host (USER session) OR does not own ' +
+      'the supplied event.',
+  })
+  @ApiNotFoundResponse({ description: 'Event not found' })
+  @Post('host/upload-url')
+  hostCreateUploadUrls(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: CreateHostUploadUrlsDto,
+  ) {
+    this.assertUser(req);
+    return this.photoService.getHostSignedUrls(
+      req.user.sub,
+      dto.eventId,
+      dto.mimeType,
+      dto.fileCount,
+    );
+  }
+
+  @ApiOperation({
+    summary: 'Save host-edited photo metadata as a brand-new photo',
+    description:
+      'Host counterpart of `POST /photo`. Creates a new photo record in an ' +
+      'event the caller owns with no `uploadedByGuestId`. Pair this with ' +
+      '`POST /photo/host/upload-url` for the "새로운 사진으로 저장" save mode.',
+  })
+  @ApiCreatedResponse({
+    description: 'Photo metadata saved successfully',
+    type: BasePhotoResponseDto,
+  })
+  @ApiForbiddenResponse({
+    description:
+      'Caller is not authenticated as a host (USER session) OR does not own ' +
+      'the supplied event.',
+  })
+  @ApiNotFoundResponse({ description: 'Event not found' })
+  @ApiConflictResponse({
+    description: 'Photo with the same file key already exists',
+  })
+  @ApiUnprocessableEntityResponse({
+    description:
+      '`fileKey` does not live under `events/{eventId}/...` or MIME type is ' +
+      'not in the supported set.',
+  })
+  @Post('host')
+  hostCreate(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: CreateHostPhotoDto,
+  ) {
+    this.assertUser(req);
+    return this.photoService.createHostPhoto(req.user.sub, dto);
   }
 
   @ApiOperation({

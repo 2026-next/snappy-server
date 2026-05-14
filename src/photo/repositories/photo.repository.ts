@@ -4,7 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 export type CreatePhotoData = {
   eventId: string;
-  guestId: string;
+  guestId?: string | null;
   originalObjectKey: string;
   mimeType?: string;
   fileSizeBytes?: number;
@@ -38,7 +38,7 @@ export class PhotoRepository {
     return this.prisma.photo.create({
       data: {
         eventId: data.eventId,
-        uploadedByGuestId: data.guestId,
+        uploadedByGuestId: data.guestId ?? null,
         originalObjectKey: data.originalObjectKey,
         mimeType: data.mimeType,
         fileSizeBytes: data.fileSizeBytes,
