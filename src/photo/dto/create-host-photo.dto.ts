@@ -64,4 +64,17 @@ export class CreateHostPhotoDto {
   @IsDateString()
   @IsOptional()
   exifTakenAt?: string;
+
+  @ApiProperty({
+    description:
+      'Optional id of an existing photo in the same event whose metadata ' +
+      '(`uploadedByGuestId`, `exifTakenAt`) should be inherited by the new ' +
+      'photo. Used by the host "새로운 사진으로 저장" flow so the edited copy ' +
+      'keeps the original uploader and taken-at timestamp.',
+    required: false,
+    example: 'photo-uuid',
+  })
+  @IsString()
+  @IsOptional()
+  sourcePhotoId?: string;
 }
