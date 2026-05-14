@@ -104,6 +104,35 @@ export class StorageService {
     }
   }
 
+  /**
+   * Downloads only the first N bytes of the object as a Buffer. Used by the
+   * EXIF extractor — JPEG EXIF/IPTC metadata is almost always within the first
+   * 64 KB, so we avoid pulling the whole multi-MB image just to read the
+   * shutter timestamp.
+   */
+  async downloadObjectPrefix(
+    fileKey: string,
+    byteCount: number,
+  ): Promise<Buffer> {
+    if (!this.bucketName) {
+      throw new InternalServerErrorException('GCS bucket is not configured');
+    }
+
+    try {
+      const stream = this.storage
+        .bucket(this.bucketName)
+        .file(fileKey)
+        .createReadStream({ start: 0, end: Math.max(0, byteCount - 1) });
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream) {
+        chunks.push(chunk as Buffer);
+      }
+      return Buffer.concat(chunks);
+    } catch {
+      throw new InternalServerErrorException('GCS prefix download failed');
+    }
+  }
+
   async downloadObject(
     fileKey: string,
   ): Promise<{ buffer: Buffer; contentType: string }> {

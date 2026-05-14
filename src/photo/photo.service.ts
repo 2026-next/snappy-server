@@ -14,6 +14,7 @@ import { PhotoRepository } from './repositories/photo.repository';
 import { PhotoAiRepository } from './repositories/photo-ai.repository';
 import { StorageService } from '../storage/storage.service';
 import { AnalysisWorkerService } from './workers/analysis-worker.service';
+import { ExifWorkerService } from './workers/exif-worker.service';
 
 const PAGE_SIZE = 20;
 const MATCHED_MESSAGE_MAX_LENGTH = 200;
@@ -74,6 +75,7 @@ export class PhotoService {
     private readonly photoAiRepository: PhotoAiRepository,
     private readonly storageService: StorageService,
     private readonly analysisWorker: AnalysisWorkerService,
+    private readonly exifWorker: ExifWorkerService,
   ) {}
 
   async getSignedUrls(guestId: string, mimeType: string, fileCount: number) {
@@ -144,6 +146,11 @@ export class PhotoService {
       // Analysis bootstrap failure must not block photo creation
       analysisJobId = null;
     }
+
+    // Best-effort EXIF back-fill. Runs out-of-band in setImmediate; the
+    // request response is unaffected. Any client-supplied exifTakenAt is
+    // overwritten once the BE extraction succeeds (BE is the source of truth).
+    this.exifWorker.start(photo.id, photo.originalObjectKey);
 
     return { ...photo, analysisJobId };
   }
