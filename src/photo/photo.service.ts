@@ -193,17 +193,35 @@ export class PhotoService {
     this.assertValidEventFileKey(dto.fileKey, dto.eventId);
     this.assertSupportedMimeType(dto.mimeType);
 
+    // Inherit uploader + taken-at from the source photo when provided so
+    // the host's edited copy doesn't lose attribution. Caller-supplied
+    // exifTakenAt still wins if both are present.
+    let inheritedGuestId: string | null = null;
+    let inheritedExifTakenAt: Date | undefined;
+    if (dto.sourcePhotoId) {
+      const source = await this.photoRepository.findPhotoMetadataForHost(
+        dto.sourcePhotoId,
+        userId,
+      );
+      if (source && source.eventId === dto.eventId) {
+        inheritedGuestId = source.uploadedByGuestId ?? null;
+        inheritedExifTakenAt = source.exifTakenAt ?? undefined;
+      }
+    }
+
     let photo: Photo;
     try {
       photo = await this.photoRepository.createPhoto({
         eventId: dto.eventId,
-        guestId: null,
+        guestId: inheritedGuestId,
         originalObjectKey: dto.fileKey,
         mimeType: dto.mimeType,
         fileSizeBytes: dto.fileSizeBytes,
         width: dto.width,
         height: dto.height,
-        exifTakenAt: dto.exifTakenAt ? new Date(dto.exifTakenAt) : undefined,
+        exifTakenAt: dto.exifTakenAt
+          ? new Date(dto.exifTakenAt)
+          : inheritedExifTakenAt,
         embedding: [],
       });
     } catch (error) {

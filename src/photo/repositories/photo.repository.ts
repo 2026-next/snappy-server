@@ -317,6 +317,29 @@ export class PhotoRepository {
   }
 
   /**
+   * Metadata-only lookup used by `createHostPhoto` when the caller passes a
+   * `sourcePhotoId` so the freshly created host photo inherits the original
+   * uploader and taken-at timestamp. Restricted to photos that live in an
+   * event the caller owns and that are not soft-deleted / host-hidden.
+   */
+  async findPhotoMetadataForHost(photoId: string, userId: string) {
+    return this.prisma.photo.findFirst({
+      where: {
+        id: photoId,
+        isDeleted: false,
+        ...VISIBLE_TO_HOST,
+        event: { ownerId: userId },
+      },
+      select: {
+        id: true,
+        eventId: true,
+        uploadedByGuestId: true,
+        exifTakenAt: true,
+      },
+    });
+  }
+
+  /**
    * Atomically swap the photo's underlying file. The Photo row is updated in
    * place (preserving id, eventId, uploader, message, group memberships,
    * favorite status, createdAt, uploadedAt, exifTakenAt). The matching
