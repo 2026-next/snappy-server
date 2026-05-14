@@ -441,4 +441,17 @@ export class PhotoRepository {
       data: { isFavorite },
     });
   }
+
+  /**
+   * Used by the EXIF worker to back-fill `exifTakenAt` once the worker has
+   * extracted the timestamp from the uploaded object. `updateMany` is used so
+   * the call is a no-op (instead of throwing P2025) when the photo has been
+   * deleted in the meantime.
+   */
+  async updateExifTakenAt(photoId: string, takenAt: Date) {
+    return this.prisma.photo.updateMany({
+      where: { id: photoId },
+      data: { exifTakenAt: takenAt },
+    });
+  }
 }

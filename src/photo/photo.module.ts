@@ -9,6 +9,7 @@ import { PhotoRepository } from './repositories/photo.repository';
 import { PhotoAiRepository } from './repositories/photo-ai.repository';
 import { AnalysisWorkerService } from './workers/analysis-worker.service';
 import { EnhancementWorkerService } from './workers/enhancement-worker.service';
+import { ExifWorkerService } from './workers/exif-worker.service';
 import { GeminiService } from './ai/gemini.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
@@ -29,6 +30,7 @@ import { StorageModule } from '../storage/storage.module';
     PhotoAiRepository,
     AnalysisWorkerService,
     EnhancementWorkerService,
+    ExifWorkerService,
     GeminiService,
   ],
   exports: [PhotoService],

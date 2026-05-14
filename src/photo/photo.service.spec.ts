@@ -7,6 +7,7 @@ import { PhotoRepository } from './repositories/photo.repository';
 import { PhotoAiRepository } from './repositories/photo-ai.repository';
 import { StorageService } from '../storage/storage.service';
 import { AnalysisWorkerService } from './workers/analysis-worker.service';
+import { ExifWorkerService } from './workers/exif-worker.service';
 
 jest.mock('uuid', () => ({ v4: () => 'mock-uuid' }));
 
@@ -135,6 +136,9 @@ describe('PhotoService', () => {
   const analysisWorker = {
     start: jest.fn(),
   };
+  const exifWorker = {
+    start: jest.fn(),
+  };
 
   const uploader: Uploader = {
     id: 'guest-1',
@@ -187,6 +191,7 @@ describe('PhotoService', () => {
         { provide: PhotoAiRepository, useValue: photoAiRepository },
         { provide: StorageService, useValue: storageService },
         { provide: AnalysisWorkerService, useValue: analysisWorker },
+        { provide: ExifWorkerService, useValue: exifWorker },
       ],
     }).compile();
 
