@@ -78,6 +78,12 @@ export class BasePhotoResponseDto {
 }
 
 export class SignedPhotoResponseDto extends BasePhotoResponseDto {
+  @ApiProperty({ example: false })
+  isRetouched!: boolean;
+
+  @ApiProperty({ example: false })
+  retouched!: boolean;
+
   @ApiProperty({
     example: 'https://storage.googleapis.com/signed-read-url',
     nullable: true,

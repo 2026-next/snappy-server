@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { PhotoSortBy } from '../dto/photo-query.dto';
 
 export type CreatePhotoData = {
   eventId: string;
@@ -76,20 +77,37 @@ export class PhotoRepository {
         uploadedByGuest: {
           select: { id: true, name: true, relation: true },
         },
+        versions: {
+          select: { isOriginal: true, sourceJobId: true },
+        },
       },
       orderBy: { uploadedAt: 'desc' },
     });
   }
 
-  async findAllByEventOrdered(eventId: string, order: Prisma.SortOrder) {
+  async findAllByEventOrdered(
+    eventId: string,
+    sortBy: PhotoSortBy = 'uploadedAt',
+    order: Prisma.SortOrder = 'desc',
+  ) {
+    const orderBy:
+      | Prisma.PhotoOrderByWithRelationInput
+      | Prisma.PhotoOrderByWithRelationInput[] =
+      sortBy === 'takenAt'
+        ? [{ exifTakenAt: { sort: order, nulls: 'last' } }, { uploadedAt: order }]
+        : { uploadedAt: order };
+
     return this.prisma.photo.findMany({
       where: { eventId, isDeleted: false, ...VISIBLE_TO_HOST },
       include: {
         uploadedByGuest: {
           select: { id: true, name: true, relation: true },
         },
+        versions: {
+          select: { isOriginal: true, sourceJobId: true },
+        },
       },
-      orderBy: { uploadedAt: order },
+      orderBy,
     });
   }
 
@@ -99,6 +117,11 @@ export class PhotoRepository {
         uploadedByGuestId: guestId,
         eventId,
         isDeleted: false,
+      },
+      include: {
+        versions: {
+          select: { isOriginal: true, sourceJobId: true },
+        },
       },
       orderBy: { uploadedAt: 'desc' },
     });
@@ -135,6 +158,9 @@ export class PhotoRepository {
         uploadedByGuest: {
           select: { id: true, name: true, relation: true },
         },
+        versions: {
+          select: { isOriginal: true, sourceJobId: true },
+        },
       },
       orderBy: [{ exifTakenAt: 'asc' }, { uploadedAt: 'asc' }],
     });
@@ -153,6 +179,9 @@ export class PhotoRepository {
           select: { id: true, name: true, relation: true },
         },
         embedding: true,
+        versions: {
+          select: { isOriginal: true, sourceJobId: true },
+        },
       },
     });
   }
@@ -183,6 +212,9 @@ export class PhotoRepository {
           },
         },
         event: { select: { id: true, name: true } },
+        versions: {
+          select: { isOriginal: true, sourceJobId: true },
+        },
       },
     });
   }
@@ -198,6 +230,9 @@ export class PhotoRepository {
       include: {
         uploadedByGuest: {
           select: { id: true, name: true, relation: true },
+        },
+        versions: {
+          select: { isOriginal: true, sourceJobId: true },
         },
       },
       orderBy: { uploadedAt: 'desc' },
@@ -258,7 +293,12 @@ export class PhotoRepository {
 
     return this.prisma.photo.findMany({
       where,
-      include: { uploadedByGuest: { select: uploaderSelect } },
+      include: {
+        uploadedByGuest: { select: uploaderSelect },
+        versions: {
+          select: { isOriginal: true, sourceJobId: true },
+        },
+      },
       orderBy: { createdAt: order },
     });
   }
@@ -480,6 +520,9 @@ export class PhotoRepository {
             include: {
               uploadedByGuest: {
                 select: { id: true, name: true, relation: true },
+              },
+              versions: {
+                select: { isOriginal: true, sourceJobId: true },
               },
             },
           },

@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { SessionType } from '@prisma/client';
 import { PhotoService } from './photo.service';
+import type { PhotoSortBy } from './dto/photo-query.dto';
 import { PhotoRepository } from './repositories/photo.repository';
 import { PhotoAiRepository } from './repositories/photo-ai.repository';
 import { StorageService } from '../storage/storage.service';
@@ -47,6 +48,10 @@ type OwnerPhoto = {
   uploadedByGuest: UploaderWithMessages | null;
   embedding: number[];
   isFavorite: boolean;
+  versions?: {
+    isOriginal: boolean;
+    sourceJobId: string | null;
+  }[];
 };
 
 type PhotoGroupLookup = {
@@ -66,7 +71,11 @@ describe('PhotoService', () => {
       >(),
     findAllByEventOrdered:
       jest.fn<
-        (eventId: string, order: 'asc' | 'desc') => Promise<OwnerPhoto[]>
+        (
+          eventId: string,
+          sortBy: PhotoSortBy,
+          order: 'asc' | 'desc',
+        ) => Promise<OwnerPhoto[]>
       >(),
     findTimelineByEvent: jest.fn<(eventId: string) => Promise<OwnerPhoto[]>>(),
     findAllByEvent:
@@ -183,6 +192,8 @@ describe('PhotoService', () => {
     originalPhotoUrl: url,
     url,
     signedUrl: url,
+    isRetouched: false,
+    retouched: false,
   });
 
   const uploaderAliasFields = (
@@ -259,10 +270,11 @@ describe('PhotoService', () => {
     const photo = createPhoto('photo-1', 'album/photo-1');
     photoRepository.findAllByEventOrdered.mockResolvedValue([photo]);
 
-    const album = await service.getFullAlbum('user-1', 'event-1', 'desc');
+    const album = await service.getFullAlbum('user-1', 'event-1');
 
     expect(photoRepository.findAllByEventOrdered).toHaveBeenCalledWith(
       'event-1',
+      'uploadedAt',
       'desc',
     );
     expect(album).toEqual([
@@ -272,6 +284,101 @@ describe('PhotoService', () => {
         ...signedUrlFields('https://signed.example/album/photo-1'),
       },
     ]);
+  });
+
+  it('passes takenAt sorting through to the repository with the uploadedAt tiebreaker', async () => {
+    const photo = createPhoto('photo-1', 'album/photo-1', {
+      exifTakenAt: new Date('2026-05-10T01:02:03.000Z'),
+    });
+    photoRepository.findAllByEventOrdered.mockResolvedValue([photo]);
+
+    const album = await service.getFullAlbum(
+      'user-1',
+      'event-1',
+      'takenAt',
+      'asc',
+    );
+
+    expect(photoRepository.findAllByEventOrdered).toHaveBeenCalledWith(
+      'event-1',
+      'takenAt',
+      'asc',
+    );
+    expect(album[0]).toMatchObject({
+      id: 'photo-1',
+      ...signedUrlFields('https://signed.example/album/photo-1'),
+      isRetouched: false,
+      retouched: false,
+    });
+    expect(album[0]).not.toHaveProperty('versions');
+  });
+
+  it('sorts takenAt by exifTakenAt with uploadedAt fallback', async () => {
+    const uploadedFallbackPhoto = createPhoto('photo-2', 'album/photo-2', {
+      uploadedAt: new Date('2026-05-11T00:00:00.000Z'),
+      exifTakenAt: null,
+    });
+    const earliestTakenPhoto = createPhoto('photo-1', 'album/photo-1', {
+      uploadedAt: new Date('2026-05-13T00:00:00.000Z'),
+      exifTakenAt: new Date('2026-05-10T00:00:00.000Z'),
+    });
+    const latestTakenPhoto = createPhoto('photo-3', 'album/photo-3', {
+      uploadedAt: new Date('2026-05-09T00:00:00.000Z'),
+      exifTakenAt: new Date('2026-05-12T00:00:00.000Z'),
+    });
+    photoRepository.findAllByEventOrdered.mockResolvedValue([
+      latestTakenPhoto,
+      uploadedFallbackPhoto,
+      earliestTakenPhoto,
+    ]);
+
+    const album = await service.getFullAlbum(
+      'user-1',
+      'event-1',
+      'takenAt',
+      'asc',
+    );
+
+    expect(album.map((photo) => photo.id)).toEqual([
+      'photo-1',
+      'photo-2',
+      'photo-3',
+    ]);
+  });
+
+  it('marks photos as retouched when any version is not original', async () => {
+    const photo = createPhoto('photo-1', 'album/photo-1', {
+      versions: [
+        { isOriginal: true, sourceJobId: null },
+        { isOriginal: false, sourceJobId: null },
+      ],
+    });
+    photoRepository.findAllByEventOrdered.mockResolvedValue([photo]);
+
+    const album = await service.getFullAlbum('user-1', 'event-1');
+
+    expect(album[0]).toMatchObject({
+      id: 'photo-1',
+      isRetouched: true,
+      retouched: true,
+    });
+    expect(album[0]).not.toHaveProperty('versions');
+  });
+
+  it('keeps retouched false when only original versions are present', async () => {
+    const photo = createPhoto('photo-1', 'album/photo-1', {
+      versions: [{ isOriginal: true, sourceJobId: null }],
+    });
+    photoRepository.findAllByEventOrdered.mockResolvedValue([photo]);
+
+    const album = await service.getFullAlbum('user-1', 'event-1');
+
+    expect(album[0]).toMatchObject({
+      id: 'photo-1',
+      isRetouched: false,
+      retouched: false,
+    });
+    expect(album[0]).not.toHaveProperty('versions');
   });
 
   it('returns timeline buckets with signed photo URLs', async () => {

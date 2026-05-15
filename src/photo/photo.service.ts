@@ -9,6 +9,7 @@ import { SessionType, type Photo } from '@prisma/client';
 import { CreateHostPhotoDto } from './dto/create-host-photo.dto';
 import { CreatePhotoDto } from './dto/create-photo.dto';
 import { CreatePhotoGroupDto } from './dto/create-photo-group.dto';
+import type { PhotoSortBy } from './dto/photo-query.dto';
 import { PhotoGroupPhotosDto } from './dto/photo-group-photos.dto';
 import { ReplacePhotoFileDto } from './dto/replace-photo-file.dto';
 import type { SearchField } from './dto/search-photos.dto';
@@ -29,9 +30,10 @@ const SUPPORTED_IMAGE_MIME_TYPES = new Set([
   'image/heif',
 ]);
 
-type CompositionPhoto = Awaited<
-  ReturnType<PhotoRepository['findEmbeddingsByEvent']>
->[number];
+type CompositionPhoto = Omit<
+  Awaited<ReturnType<PhotoRepository['findEmbeddingsByEvent']>>[number],
+  'versions'
+>;
 
 type PhotoWithObjectKey = {
   originalObjectKey: string;
@@ -55,6 +57,13 @@ type PhotoWithUploader = {
   uploadedByGuest: UploaderMetadata | null;
 };
 
+type PhotoWithVersions = {
+  versions?: {
+    isOriginal: boolean;
+    sourceJobId: string | null;
+  }[];
+};
+
 const RELATION_CODES: Record<string, RelationCode> = {
   PARENT: 1,
   FRIEND: 2,
@@ -65,7 +74,7 @@ const RELATION_CODES: Record<string, RelationCode> = {
   OTHER: 7,
 };
 
-type PhotoWithTakenAt = {
+type PhotoWithTakenAt = PhotoWithVersions & {
   exifTakenAt: Date | null;
   uploadedAt: Date;
 };
@@ -290,13 +299,21 @@ export class PhotoService {
     await this.storageService.deleteObject(photo.originalObjectKey);
   }
 
-  async getFullAlbum(userId: string, eventId: string, order: 'asc' | 'desc') {
+  async getFullAlbum(
+    userId: string,
+    eventId: string,
+    sortBy: PhotoSortBy = 'uploadedAt',
+    order: 'asc' | 'desc' = 'desc',
+  ) {
     await this.assertEventOwner(eventId, userId);
     const photos = await this.photoRepository.findAllByEventOrdered(
       eventId,
+      sortBy,
       order,
     );
-    return this.withOriginalPhotoUrls(photos);
+    const sortedPhotos =
+      sortBy === 'takenAt' ? this.sortPhotosByTakenAt(photos, order) : photos;
+    return this.withOriginalPhotoUrls(sortedPhotos);
   }
 
   async getTimeline(userId: string, eventId: string) {
@@ -354,11 +371,14 @@ export class PhotoService {
         }
       : null;
 
-    const photoWithoutMessages = { ...photo, uploadedByGuest };
+    const { versions, ...photoWithoutVersions } = photo;
+    void versions;
+    const photoWithoutMessages = { ...photoWithoutVersions, uploadedByGuest };
 
     return {
       ...photoWithoutMessages,
       ...this.getPhotoUploaderAliases(photoWithoutMessages),
+      ...this.getRetouchFlags(photo),
       originalPhotoUrl,
       url: originalPhotoUrl,
       signedUrl: originalPhotoUrl,
@@ -722,23 +742,49 @@ export class PhotoService {
   }
 
   private async withOriginalPhotoUrls<T extends PhotoWithObjectKey>(
-    photos: T[],
+    photos: (T & PhotoWithVersions)[],
   ) {
     return Promise.all(
       photos.map(async (photo) => {
+        const { versions, ...photoWithoutVersions } = photo;
+        void versions;
         const originalPhotoUrl = await this.storageService.getReadUrl(
           photo.originalObjectKey,
         );
 
         return {
-          ...photo,
+          ...photoWithoutVersions,
           ...this.getPhotoUploaderAliases(photo),
+          ...this.getRetouchFlags(photo),
           originalPhotoUrl,
           url: originalPhotoUrl,
           signedUrl: originalPhotoUrl,
         };
       }),
     );
+  }
+
+  private getRetouchFlags(photo: PhotoWithVersions) {
+    const isRetouched = (photo.versions ?? []).some(
+      (version) => version.isOriginal === false || version.sourceJobId != null,
+    );
+
+    return {
+      isRetouched,
+      retouched: isRetouched,
+    };
+  }
+
+  private sortPhotosByTakenAt<T extends PhotoWithTakenAt>(
+    photos: T[],
+    order: 'asc' | 'desc',
+  ) {
+    const direction = order === 'asc' ? 1 : -1;
+    return [...photos].sort((a, b) => {
+      const aTakenAt = a.exifTakenAt ?? a.uploadedAt;
+      const bTakenAt = b.exifTakenAt ?? b.uploadedAt;
+      return (aTakenAt.getTime() - bTakenAt.getTime()) * direction;
+    });
   }
 
   private groupByTimeline<T extends PhotoWithTakenAt>(photos: T[]) {

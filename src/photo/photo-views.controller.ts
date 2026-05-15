@@ -50,6 +50,7 @@ export class PhotoViewsController {
     return this.photoService.getFullAlbum(
       req.user.sub,
       query.eventId,
+      query.sortBy,
       query.order,
     );
   }
